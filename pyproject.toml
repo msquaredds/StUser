@@ -34,5 +34,5 @@ classifiers = [
 'base repository' = 'https://github.com/mkhorasani/Streamlit-Authenticator'
 'test repository' = 'https://github.com/msquaredds/StreamlitAuth'
 
-[tool.setuptools.packages.find]
-where = ['StreamlitAuth']
+[tool.setuptools]
+packages = ["StreamlitAuth"]
