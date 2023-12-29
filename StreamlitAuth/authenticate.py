@@ -8,15 +8,18 @@ from .hasher import Hasher
 from .validator import Validator
 from .utils import generate_random_pw
 
+from StreamlitAuth import ErrorHandling as eh
+
 from .exceptions import CredentialsError, ForgotError, RegisterError, ResetError, UpdateError
 
-class Authenticate:
+class Authenticate(Validator):
     """
     This class will create login, logout, register user, reset password, forgot password, 
     forgot username, and modify user details widgets.
     """
-    def __init__(self, credentials: dict, cookie_name: str, key: str, cookie_expiry_days: float=30.0, 
-        preauthorized: list=None, validator: Validator=None):
+    def __init__(self, usernames: list, emails: list, cookie_name: str,
+                 key: str, cookie_expiry_days: float=30.0,
+                 preauthorized: list=None) -> None:
         """
         Create a new instance of "Authenticate".
 
@@ -32,17 +35,15 @@ class Authenticate:
             The number of days before the cookie expires on the client's browser.
         preauthorized: list
             The list of emails of unregistered users authorized to register.
-        validator: Validator
-            A Validator object that checks the validity of the username, name, and email fields.
         """
-        self.credentials = credentials
-        self.credentials['usernames'] = {key.lower(): value for key, value in credentials['usernames'].items()}
+        Validator.__init__()
+        self.usernames = [username.lower() for username in usernames]
+        self.emails = emails
         self.cookie_name = cookie_name
         self.key = key
         self.cookie_expiry_days = cookie_expiry_days
         self.preauthorized = preauthorized
         self.cookie_manager = stx.CookieManager()
-        self.validator = validator if validator is not None else Validator()
 
         if 'name' not in st.session_state:
             st.session_state['name'] = None
@@ -283,7 +284,67 @@ class Authenticate:
                     raise ResetError('No new password provided')
             else:
                 raise CredentialsError('password')
-    
+
+    def _check_registered_user(
+            self, new_email: str, new_username: str, new_password: str,
+            new_password_repeat: str, preauthorization: bool) -> bool:
+        """
+        Check whether the registering user input is valid.
+        """
+        # all fields must be filled
+        if not (len(new_email) and len(new_username) and
+                len(new_password) > 0):
+            eh.add_user_error(
+                'register_user',
+                "Please enter an email, username and password.")
+            return False
+        # the email must not already be used
+        if new_email in self.emails:
+            eh.add_user_error(
+                'register_user',
+                "Email already taken, please use forgot username if this is "
+                "your email.")
+            return False
+        # the email must be of correct format
+        if not self.validate_email(new_email):
+            eh.add_user_error(
+                'register_user',
+                "Email is not a valid format.")
+            return False
+        # the username must not already be used
+        if new_username in self.usernames:
+            eh.add_user_error(
+                'register_user',
+                "Username already taken.")
+            return False
+        # the username must be of correct format
+        if not self.validate_username(new_username):
+            eh.add_user_error(
+                'register_user',
+                "Username must only include letters, numbers, '-' or '_' "
+                "and be between 1 and 20 characters long.")
+            return False
+        # the password must be secure enough
+        if not self.validate_password(new_password):
+            eh.add_user_error(
+                'register_user',
+                "Password must be between 8 and 64 characters, contain at "
+                "least one uppercase letter, one lowercase letter, one "
+                "number, and one special character.")
+            return False
+        # the password must be repeated correctly
+        if new_password != new_password_repeat:
+            eh.add_user_error(
+                'register_user',
+                "Passwords do not match.")
+            return False
+        if preauthorization and new_email not in self.preauthorized:
+            eh.add_user_error(
+                'register_user',
+                "User not preauthorized to register.")
+            return False
+        return True
+
     def _register_credentials(self, username: str, name: str, password: str, email: str, preauthorization: bool):
         """
         Adds to credentials dictionary the new user's information.
@@ -314,60 +375,65 @@ class Authenticate:
         if preauthorization:
             self.preauthorized['emails'].remove(email)
 
-    def register_user(self, form_name: str, location: str='main', preauthorization=True) -> bool:
+    def _check_register_user(
+            self, new_email: str, new_username: str, new_password: str,
+            new_password_repeat: str, preauthorization: bool) -> None:
         """
-        Creates a register new user widget.
+        Once a new user submits their info, this is a callback to check
+        the validity of their input and register them if valid.
+        """
+        if self._check_registered_user(
+                new_email, new_username, new_password, new_password_repeat,
+                preauthorization):
+            self._register_credentials(
+                new_username, new_name, new_password, new_email,
+                preauthorization)
+
+    def register_user(self, location: str='main',
+                      preauthorization=True) -> None:
+        """
+        Creates a new user registration widget.
 
         Parameters
         ----------
-        form_name: str
-            The rendered name of the register new user form.
         location: str
-            The location of the register new user form i.e. main or sidebar.
+            The location of the register new user form i.e. main or
+            sidebar.
         preauthorization: bool
-            The preauthorization requirement, True: user must be preauthorized to register, 
+            The preauthorization requirement.
+            True: user must be preauthorized to register.
             False: any user can register.
-        Returns
-        -------
-        bool
-            The status of registering the new user, True: user registered successfully.
         """
         if preauthorization:
             if not self.preauthorized:
-                raise ValueError("preauthorization argument must not be None")
+                eh.add_dev_error(
+                    'register_user',
+                    "Preauthorization argument must not be None when "
+                    "preauthorization is True")
+            return False
         if location not in ['main', 'sidebar']:
-            raise ValueError("Location must be one of 'main' or 'sidebar'")
+            eh.add_dev_error(
+                'register_user',
+                "Location argument must be one of 'main' or 'sidebar'")
+            return False
+
         if location == 'main':
             register_user_form = st.form('Register user')
         elif location == 'sidebar':
             register_user_form = st.sidebar.form('Register user')
 
-        register_user_form.subheader(form_name)
+        register_user_form.subheader('Register user')
         new_email = register_user_form.text_input('Email')
         new_username = register_user_form.text_input('Username').lower()
-        new_name = register_user_form.text_input('Name')
-        new_password = register_user_form.text_input('Password', type='password')
-        new_password_repeat = register_user_form.text_input('Repeat password', type='password')
+        new_password = register_user_form.text_input('Password',
+                                                     type='password')
+        new_password_repeat = register_user_form.text_input('Repeat password',
+                                                            type='password')
 
-        if register_user_form.form_submit_button('Register'):
-            if len(new_email) and len(new_username) and len(new_name) and len(new_password) > 0:
-                if new_username not in self.credentials['usernames']:
-                    if new_password == new_password_repeat:
-                        if preauthorization:
-                            if new_email in self.preauthorized['emails']:
-                                self._register_credentials(new_username, new_name, new_password, new_email, preauthorization)
-                                return True
-                            else:
-                                raise RegisterError('User not preauthorized to register')
-                        else:
-                            self._register_credentials(new_username, new_name, new_password, new_email, preauthorization)
-                            return True
-                    else:
-                        raise RegisterError('Passwords do not match')
-                else:
-                    raise RegisterError('Username already taken')
-            else:
-                raise RegisterError('Please enter an email, username, name, and password')
+        register_user_form.form_submit_button(
+            'Register', on_click=self._check_register_user,
+            args=(new_email, new_username, new_password, new_password_repeat,
+                  preauthorization))
 
     def _set_random_password(self, username: str) -> str:
         """

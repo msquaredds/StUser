@@ -1,3 +1,4 @@
+from StreamlitAuth import ErrorHandling
 from StreamlitAuth import utils
 from StreamlitAuth.authenticate import Authenticate
 from StreamlitAuth.exceptions import (CredentialsError, ResetError,
