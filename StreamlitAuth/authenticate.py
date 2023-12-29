@@ -12,14 +12,14 @@ from StreamlitAuth import ErrorHandling as eh
 
 from .exceptions import CredentialsError, ForgotError, RegisterError, ResetError, UpdateError
 
-class Authenticate(Validator):
+class Authenticate(object):
     """
     This class will create login, logout, register user, reset password, forgot password, 
     forgot username, and modify user details widgets.
     """
-    def __init__(self, usernames: list, emails: list, preauthorized: list=None,
-                 weak_passwords: list=[], cookie_name: str,
-                 key: str, cookie_expiry_days: float=30.0) -> None:
+    def __init__(self, usernames: list, emails: list, cookie_name: str,
+                 key: str, preauthorized: list=None, weak_passwords: list=[],
+                 cookie_expiry_days: float=30.0) -> None:
         """
         Create a new instance of "Authenticate".
 
@@ -29,25 +29,25 @@ class Authenticate(Validator):
             The set of existing usernames.
         emails: list
             The set of existing emails.
+        cookie_name: str
+            The name of the JWT cookie stored on the client's browser for passwordless reauthentication.
+        key: str
+            The key to be used for hashing the signature of the JWT cookie.
         preauthorized: list
             The list of emails of unregistered users authorized to register.
         weak_passwords: list
             The list of weak passwords that shouldn't be used. This isn't
             required, but is recommended.
-        cookie_name: str
-            The name of the JWT cookie stored on the client's browser for passwordless reauthentication.
-        key: str
-            The key to be used for hashing the signature of the JWT cookie.
         cookie_expiry_days: float
             The number of days before the cookie expires on the client's browser.
         """
-        Validator.__init__()
         self.usernames = [username.lower() for username in usernames]
         self.emails = emails
         self.cookie_name = cookie_name
         self.key = key
-        self.cookie_expiry_days = cookie_expiry_days
         self.preauthorized = preauthorized
+        self.weak_passwords = weak_passwords
+        self.cookie_expiry_days = cookie_expiry_days
         self.cookie_manager = stx.CookieManager()
 
         if 'name' not in st.session_state:
@@ -296,6 +296,7 @@ class Authenticate(Validator):
         """
         Check whether the registering user input is valid.
         """
+        validator = Validator()
         # all fields must be filled
         if not (len(new_email) and len(new_username) and
                 len(new_password) > 0):
@@ -311,7 +312,7 @@ class Authenticate(Validator):
                 "your email.")
             return False
         # the email must be of correct format
-        if not self.validate_email(new_email):
+        if not validator.validate_email(new_email):
             eh.add_user_error(
                 'register_user',
                 "Email is not a valid format.")
@@ -323,14 +324,14 @@ class Authenticate(Validator):
                 "Username already taken.")
             return False
         # the username must be of correct format
-        if not self.validate_username(new_username):
+        if not validator.validate_username(new_username):
             eh.add_user_error(
                 'register_user',
                 "Username must only include letters, numbers, '-' or '_' "
                 "and be between 1 and 20 characters long.")
             return False
         # the password must be secure enough
-        if not self.validate_password(new_password, self.weak_passwords):
+        if not validator.validate_password(new_password, self.weak_passwords):
             eh.add_user_error(
                 'register_user',
                 "Password must be between 8 and 64 characters, contain at "
@@ -368,13 +369,6 @@ class Authenticate(Validator):
             The preauthorization requirement, True: user must be preauthorized to register, 
             False: any user can register.
         """
-        if not self.validator.validate_username(username):
-            raise RegisterError('Username is not valid')
-        if not self.validator.validate_name(name):
-            raise RegisterError('Name is not valid')
-        if not self.validator.validate_email(email):
-            raise RegisterError('Email is not valid')
-
         self.credentials['usernames'][username] = {'name': name, 
             'password': Hasher([password]).generate()[0], 'email': email}
         if preauthorization:
