@@ -19,8 +19,7 @@ class Authenticate(Validator):
     """
     def __init__(self, usernames: list, emails: list, preauthorized: list=None,
                  weak_passwords: list=[], cookie_name: str,
-                 key: str, cookie_expiry_days: float=30.0,
-                 ) -> None:
+                 key: str, cookie_expiry_days: float=30.0) -> None:
         """
         Create a new instance of "Authenticate".
 
