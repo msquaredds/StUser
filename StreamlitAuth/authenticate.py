@@ -17,24 +17,30 @@ class Authenticate(Validator):
     This class will create login, logout, register user, reset password, forgot password, 
     forgot username, and modify user details widgets.
     """
-    def __init__(self, usernames: list, emails: list, cookie_name: str,
+    def __init__(self, usernames: list, emails: list, preauthorized: list=None,
+                 weak_passwords: list=[], cookie_name: str,
                  key: str, cookie_expiry_days: float=30.0,
-                 preauthorized: list=None) -> None:
+                 ) -> None:
         """
         Create a new instance of "Authenticate".
 
         Parameters
         ----------
-        credentials: dict
-            The dictionary of usernames, names, passwords, and emails.
+        usernames: list
+            The set of existing usernames.
+        emails: list
+            The set of existing emails.
+        preauthorized: list
+            The list of emails of unregistered users authorized to register.
+        weak_passwords: list
+            The list of weak passwords that shouldn't be used. This isn't
+            required, but is recommended.
         cookie_name: str
             The name of the JWT cookie stored on the client's browser for passwordless reauthentication.
         key: str
             The key to be used for hashing the signature of the JWT cookie.
         cookie_expiry_days: float
             The number of days before the cookie expires on the client's browser.
-        preauthorized: list
-            The list of emails of unregistered users authorized to register.
         """
         Validator.__init__()
         self.usernames = [username.lower() for username in usernames]
@@ -325,7 +331,7 @@ class Authenticate(Validator):
                 "and be between 1 and 20 characters long.")
             return False
         # the password must be secure enough
-        if not self.validate_password(new_password):
+        if not self.validate_password(new_password, self.weak_passwords):
             eh.add_user_error(
                 'register_user',
                 "Password must be between 8 and 64 characters, contain at "

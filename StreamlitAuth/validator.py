@@ -36,7 +36,8 @@ class Validator:
         pattern = r"^[a-zA-Z0-9_-]{1,20}$"
         return bool(re.match(pattern, username))
 
-    def validate_password(self, password: str) -> bool:
+    def validate_password(self, password: str,
+                          weak_passwords: list=[]) -> bool:
         """
         Checks the validity of the entered password.
 
@@ -44,6 +45,8 @@ class Validator:
         ----------
         password: str
             The password to be validated.
+        weak_passwords: list
+            List of weak passwords that shouldn't be used.
         Returns
         -------
         bool
@@ -65,10 +68,14 @@ class Validator:
         # searching for symbols
         symbol_error = re.search(r"\W", password) is None
 
+        # searching for weak passwords
+        weak_password_error = password in weak_passwords
+
         # overall result
         if (length_short_error or length_long_error or
                 digit_error or uppercase_error or
-                lowercase_error or symbol_error):
+                lowercase_error or symbol_error or
+                weak_password_error):
             return False
         else:
             return True
