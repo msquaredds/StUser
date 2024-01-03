@@ -1,6 +1,7 @@
-import bcrypt
+from argon2 import PasswordHasher
 
-class Hasher:
+
+class Hasher(object):
     """
     This class will hash plain text passwords.
     """
@@ -14,6 +15,7 @@ class Hasher:
             The list of plain text passwords to be hashed.
         """
         self.passwords = passwords
+        self.ph = PasswordHasher()
 
     def _hash(self, password: str) -> str:
         """
@@ -28,7 +30,7 @@ class Hasher:
         str
             The hashed password.
         """
-        return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+        return self.ph.hash(password)
 
     def generate(self) -> list:
         """

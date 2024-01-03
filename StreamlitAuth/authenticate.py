@@ -19,6 +19,7 @@ class Authenticate(object):
     """
     def __init__(self, usernames: list, emails: list, cookie_name: str,
                  key: str, preauthorized: list=None, weak_passwords: list=[],
+                 user_credentials: dict=None,
                  cookie_expiry_days: float=30.0) -> None:
         """
         Create a new instance of "Authenticate".
@@ -30,16 +31,24 @@ class Authenticate(object):
         emails: list
             The set of existing emails.
         cookie_name: str
-            The name of the JWT cookie stored on the client's browser for passwordless reauthentication.
+            The name of the JWT cookie stored on the client's browser for
+            passwordless reauthentication.
         key: str
-            The key to be used for hashing the signature of the JWT cookie.
+            The key to be used for hashing the signature of the JWT
+            cookie.
         preauthorized: list
-            The list of emails of unregistered users authorized to register.
+            The list of emails of unregistered users authorized to
+            register.
         weak_passwords: list
             The list of weak passwords that shouldn't be used. This isn't
             required, but is recommended.
+        user_credentials: dict
+            The dictionary of user credentials as {username:
+            {email: email, password: password}}, with username and email
+            encrypted and password hashed.
         cookie_expiry_days: float
-            The number of days before the cookie expires on the client's browser.
+            The number of days before the cookie expires on the client's
+            browser.
         """
         self.usernames = [username.lower() for username in usernames]
         self.emails = emails
@@ -47,6 +56,7 @@ class Authenticate(object):
         self.key = key
         self.preauthorized = preauthorized
         self.weak_passwords = weak_passwords
+        self.credentials = user_credentials
         self.cookie_expiry_days = cookie_expiry_days
         self.cookie_manager = stx.CookieManager()
 
@@ -351,7 +361,8 @@ class Authenticate(object):
             return False
         return True
 
-    def _register_credentials(self, username: str, name: str, password: str, email: str, preauthorization: bool):
+    def _register_credentials(self, username: str, password: str,
+                              email: str, preauthorization: bool) -> None:
         """
         Adds to credentials dictionary the new user's information.
 
@@ -366,9 +377,13 @@ class Authenticate(object):
         email: str
             The email of the new user.
         preauthorization: bool
-            The preauthorization requirement, True: user must be preauthorized to register, 
+            The preauthorization requirement.
+            True: user must be preauthorized to register.
             False: any user can register.
         """
+
+        password = Hasher([password]).generate()[0]
+        self.user_credentials
         self.credentials['usernames'][username] = {'name': name, 
             'password': Hasher([password]).generate()[0], 'email': email}
         if preauthorization:
@@ -389,7 +404,7 @@ class Authenticate(object):
                 preauthorization)
 
     def register_user(self, location: str='main',
-                      preauthorization=True) -> None:
+                      preauthorization=True) -> Union[bool, None]:
         """
         Creates a new user registration widget.
 
