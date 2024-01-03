@@ -400,8 +400,7 @@ class Authenticate(object):
                 new_email, new_username, new_password, new_password_repeat,
                 preauthorization):
             self._register_credentials(
-                new_username, new_name, new_password, new_email,
-                preauthorization)
+                new_username, new_password, new_email, preauthorization)
 
     def register_user(self, location: str='main',
                       preauthorization=True) -> Union[bool, None]:

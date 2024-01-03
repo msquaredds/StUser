@@ -102,13 +102,13 @@ class GoogleEncryptor(object):
         # https://cloud.google.com/kms/docs/data-integrity-guidelines
         if not encrypt_response.verified_plaintext_crc32c:
             eh.add_dev_error(
-                'register_user',
+                'GoogleEncryptor',
                 "The request sent to google to encrypt the data was "
                 "corrupted in-transit.")
         if not encrypt_response.ciphertext_crc32c == self._crc32c(
                 encrypt_response.ciphertext):
             eh.add_dev_error(
-                'register_user',
+                'GoogleEncryptor',
                 "The response received from google when encrypting the "
                 "data was corrupted in-transit.")
 
@@ -149,7 +149,7 @@ class GoogleEncryptor(object):
         if not decrypt_response.plaintext_crc32c == self._crc32c(
                 decrypt_response.plaintext):
             eh.add_dev_error(
-                'register_user',
+                'GoogleEncryptor',
                 "The response received from google when decrypting the "
                 "data was corrupted in-transit.")
 
