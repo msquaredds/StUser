@@ -7,10 +7,11 @@ import extra_streamlit_components as stx
 from .hasher import Hasher
 from .validator import Validator
 from .utils import generate_random_pw
+from .exceptions import CredentialsError, ForgotError, RegisterError, ResetError, UpdateError
 
 from StreamlitAuth import ErrorHandling as eh
+from StreamlitAuth.encryptor import GenericEncryptor, GoogleEncryptor
 
-from .exceptions import CredentialsError, ForgotError, RegisterError, ResetError, UpdateError
 
 class Authenticate(object):
     """
@@ -56,18 +57,18 @@ class Authenticate(object):
         self.key = key
         self.preauthorized = preauthorized
         self.weak_passwords = weak_passwords
-        self.credentials = user_credentials
+        self.user_credentials = user_credentials
         self.cookie_expiry_days = cookie_expiry_days
         self.cookie_manager = stx.CookieManager()
 
-        if 'name' not in st.session_state:
-            st.session_state['name'] = None
-        if 'authentication_status' not in st.session_state:
-            st.session_state['authentication_status'] = None
-        if 'username' not in st.session_state:
-            st.session_state['username'] = None
-        if 'logout' not in st.session_state:
-            st.session_state['logout'] = None
+        if 'stauth' not in st.session_state:
+            st.session_state['stauth'] = {}
+        if 'authentication_status' not in st.session_state.stauth:
+            st.session_state.stauth['authentication_status'] = None
+        if 'username' not in st.session_state.stauth:
+            st.session_state.stauth['username'] = None
+        if 'logout' not in st.session_state.stauth:
+            st.session_state.stauth['logout'] = None
 
     def _token_encode(self) -> str:
         """
@@ -362,7 +363,8 @@ class Authenticate(object):
         return True
 
     def _register_credentials(self, username: str, password: str,
-                              email: str, preauthorization: bool) -> None:
+                              email: str, preauthorization: bool,
+                              encrypt_type: str, **kwargs) -> None:
         """
         Adds to credentials dictionary the new user's information.
 
@@ -381,17 +383,30 @@ class Authenticate(object):
             True: user must be preauthorized to register.
             False: any user can register.
         """
+        # we want to add our new username and email so they can't be
+        # accidentally registered again
+        self.usernames.append(username)
+        self.emails.append(email)
 
+        # encrypt / hash info and add to credentials dictionary
+        if encrypt_type.lower() == 'generic':
+            encryptor = GenericEncryptor()
+        elif encrypt_type.lower() == 'google':
+            encryptor = GoogleEncryptor(kwargs)
+        username = encryptor.encrypt(username)
+        email = encryptor.encrypt(email)
         password = Hasher([password]).generate()[0]
-        self.user_credentials
-        self.credentials['usernames'][username] = {'name': name, 
-            'password': Hasher([password]).generate()[0], 'email': email}
+        self.user_credentials = {username: {'email': email,
+                                            'password': password}}
+
+        # if we had the name preauthorized, remove it from that list
         if preauthorization:
             self.preauthorized['emails'].remove(email)
 
     def _check_register_user(
             self, new_email: str, new_username: str, new_password: str,
-            new_password_repeat: str, preauthorization: bool) -> None:
+            new_password_repeat: str, preauthorization: bool,
+            encrypt_type: str, **kwargs) -> None:
         """
         Once a new user submits their info, this is a callback to check
         the validity of their input and register them if valid.
@@ -400,10 +415,13 @@ class Authenticate(object):
                 new_email, new_username, new_password, new_password_repeat,
                 preauthorization):
             self._register_credentials(
-                new_username, new_password, new_email, preauthorization)
+                new_username, new_password, new_email, preauthorization,
+                encrypt_type, kwargs)
 
     def register_user(self, location: str='main',
-                      preauthorization=True) -> Union[bool, None]:
+                      preauthorization=True,
+                      encrypt_type: str='google',
+                      **kwargs) -> Union[bool, None]:
         """
         Creates a new user registration widget.
 
@@ -416,18 +434,35 @@ class Authenticate(object):
             The preauthorization requirement.
             True: user must be preauthorized to register.
             False: any user can register.
+        encrypt_type: str
+            The type of encryption to use for the user credentials.
+            'generic': Fernet symmetric encryption.
+            'google': Google Cloud KMS API.
+        **kwargs:
+            Additional arguments for the encryption. Currently only needed
+            if using 'google' encryption, in which case the following
+            arguments are required:
+            project_id (string): Google Cloud project ID (e.g. 'my-project').
+            location_id (string): Cloud KMS location (e.g. 'us-east1').
+            key_ring_id (string): ID of the Cloud KMS key ring (e.g. 'my-key-ring').
+            key_id (string): ID of the key to use (e.g. 'my-key').
         """
+        if location not in ['main', 'sidebar']:
+            eh.add_dev_error(
+                'register_user',
+                "location argument must be one of 'main' or 'sidebar'")
+            return False
         if preauthorization:
             if not self.preauthorized:
                 eh.add_dev_error(
                     'register_user',
-                    "Preauthorization argument must not be None when "
+                    "preauthorization argument must not be None when "
                     "preauthorization is True")
             return False
-        if location not in ['main', 'sidebar']:
+        if encrypt_type.lower() not in ['generic', 'google']:
             eh.add_dev_error(
                 'register_user',
-                "Location argument must be one of 'main' or 'sidebar'")
+                "encrypt_type argument must be one of 'generic' or 'google'")
             return False
 
         if location == 'main':
@@ -446,7 +481,7 @@ class Authenticate(object):
         register_user_form.form_submit_button(
             'Register', on_click=self._check_register_user,
             args=(new_email, new_username, new_password, new_password_repeat,
-                  preauthorization))
+                  preauthorization, encrypt_type, kwargs))
 
     def _set_random_password(self, username: str) -> str:
         """

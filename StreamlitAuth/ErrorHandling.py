@@ -26,9 +26,11 @@ def add_dev_error(key: str, error: str) -> None:
     error: str
         The error message to display.
     """
-    if 'dev_errors' not in st.session_state:
-        st.session_state.dev_errors = {}
-    st.session_state.dev_errors[key] = error
+    if 'stauth' not in st.session_state:
+        st.session_state.stauth = {}
+    if 'dev_errors' not in st.session_state.stauth:
+        st.session_state.stauth.dev_errors = {}
+    st.session_state.stauth.dev_errors[key] = error
 
 def add_user_error(key: str, error: str) -> None:
     """
@@ -41,6 +43,8 @@ def add_user_error(key: str, error: str) -> None:
     error: str
         The error message to display.
     """
-    if 'user_errors' not in st.session_state:
-        st.session_state.user_errors = {}
-    st.session_state.user_errors[key] = error
+    if 'stauth' not in st.session_state:
+        st.session_state.stauth = {}
+    if 'user_errors' not in st.session_state.stauth:
+        st.session_state.stauth.user_errors = {}
+    st.session_state.stauth.user_errors[key] = error
