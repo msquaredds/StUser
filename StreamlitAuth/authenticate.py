@@ -44,8 +44,8 @@ class Authenticate(object):
             The list of weak passwords that shouldn't be used. This isn't
             required, but is recommended.
         user_credentials: dict
-            The dictionary of user credentials as {username:
-            {email: email, password: password}}, with username and email
+            The dictionary of user credentials as {'username': username,
+            'email': email, 'password': password}, with username and email
             encrypted and password hashed.
         cookie_expiry_days: float
             The number of days before the cookie expires on the client's
@@ -396,8 +396,8 @@ class Authenticate(object):
         username = encryptor.encrypt(username)
         email = encryptor.encrypt(email)
         password = Hasher([password]).generate()[0]
-        self.user_credentials = {username: {'email': email,
-                                            'password': password}}
+        self.user_credentials = {'username': username, 'email': email,
+                                 'password': password}
 
         # if we had the name preauthorized, remove it from that list
         if preauthorization:
