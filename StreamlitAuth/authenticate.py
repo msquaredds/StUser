@@ -19,9 +19,9 @@ class Authenticate(object):
     forgot username, and modify user details widgets.
     """
     def __init__(self, usernames: list, emails: list, cookie_name: str,
-                 key: str, preauthorized: list=None, weak_passwords: list=[],
-                 user_credentials: dict=None,
-                 cookie_expiry_days: float=30.0) -> None:
+                 cookie_key: str, cookie_expiry_days: float=30.0,
+                 preauthorized: list=None, weak_passwords: list=[],
+                 user_credentials: dict=None) -> None:
         """
         Create a new instance of "Authenticate".
 
@@ -34,9 +34,12 @@ class Authenticate(object):
         cookie_name: str
             The name of the JWT cookie stored on the client's browser for
             passwordless reauthentication.
-        key: str
+        cookie_key: str
             The key to be used for hashing the signature of the JWT
             cookie.
+        cookie_expiry_days: float
+            The number of days before the cookie expires on the client's
+            browser.
         preauthorized: list
             The list of emails of unregistered users authorized to
             register.
@@ -47,14 +50,11 @@ class Authenticate(object):
             The dictionary of user credentials as {'username': username,
             'email': email, 'password': password}, with username and email
             encrypted and password hashed.
-        cookie_expiry_days: float
-            The number of days before the cookie expires on the client's
-            browser.
         """
         self.usernames = [username.lower() for username in usernames]
         self.emails = emails
         self.cookie_name = cookie_name
-        self.key = key
+        self.cookie_key = cookie_key
         self.preauthorized = preauthorized
         self.weak_passwords = weak_passwords
         self.user_credentials = user_credentials
@@ -81,7 +81,7 @@ class Authenticate(object):
         """
         return jwt.encode({'name':st.session_state['name'],
             'username':st.session_state['username'],
-            'exp_date':self.exp_date}, self.key, algorithm='HS256')
+            'exp_date':self.exp_date}, self.cookie_key, algorithm='HS256')
 
     def _token_decode(self) -> str:
         """
@@ -93,7 +93,7 @@ class Authenticate(object):
             The decoded JWT cookie for passwordless reauthentication.
         """
         try:
-            return jwt.decode(self.token, self.key, algorithms=['HS256'])
+            return jwt.decode(self.token, self.cookie_key, algorithms=['HS256'])
         except:
             return False
 
@@ -401,7 +401,7 @@ class Authenticate(object):
 
         # if we had the name preauthorized, remove it from that list
         if preauthorization:
-            self.preauthorized['emails'].remove(email)
+            self.preauthorized.remove(email)
 
     def _check_register_user(
             self, new_email: str, new_username: str, new_password: str,
