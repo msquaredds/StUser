@@ -418,9 +418,9 @@ class Authenticate(object):
                 new_username, new_password, new_email, preauthorization,
                 encrypt_type, kwargs)
 
-    def register_user(self, location: str='main',
-                      preauthorization=True,
-                      encrypt_type: str='google',
+    def register_user(self, location: str = 'main',
+                      preauthorization: bool = True,
+                      encrypt_type: str = 'google',
                       **kwargs) -> Union[bool, None]:
         """
         Creates a new user registration widget.
