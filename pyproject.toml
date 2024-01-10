@@ -14,11 +14,14 @@ authors = [
 license = {file = 'LICENSE'}
 requires-python = '>=3.6'
 dependencies = [
-    "PyJWT >=2.3.0",
+    "argon2-cffi >= 23.1.0",
     "bcrypt >= 3.1.7",
+    "crcmod >= 1.7",
+    "cryptography >= 41.0.7",
+    "extra-streamlit-components >= 0.1.60",
+    "PyJWT >=2.3.0",
     "PyYAML >= 5.3.1",
-    "streamlit >= 1.18.0",
-    "extra-streamlit-components >= 0.1.60"
+    "streamlit >= 1.18.0"
 ]
 keywords = ['Python', 'Streamlit', 'Authentication', 'Components']
 classifiers = [
@@ -29,6 +32,9 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent"
 ]
+
+[project.optional-dependencies]
+google = ["google-cloud-kms >= 2.20.0"]
 
 [project.urls]
 'base repository' = 'https://github.com/mkhorasani/Streamlit-Authenticator'
