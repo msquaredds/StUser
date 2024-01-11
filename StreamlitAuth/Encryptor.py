@@ -3,6 +3,7 @@ import base64
 
 from cryptography.fernet import Fernet
 from google.cloud import kms
+from typing import Tuple
 
 from StreamlitAuth import ErrorHandling as eh
 
