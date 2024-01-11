@@ -1,8 +1,10 @@
-import jwt
 import bcrypt
-import streamlit as st
-from datetime import datetime, timedelta
 import extra_streamlit_components as stx
+import jwt
+import streamlit as st
+
+from datetime import datetime, timedelta
+from typing import Union
 
 from .hasher import Hasher
 from .validator import Validator
