@@ -15,6 +15,9 @@ displayed differently or with additional information for the user, so they
 know that it is a coding error and not something they did wrong.
 """
 
+import streamlit as st
+
+
 def add_dev_error(key: str, error: str) -> None:
     """
     Adds an error to the streamlit.session_state.dev_errors dictionary.
