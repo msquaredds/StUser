@@ -10,7 +10,7 @@ from .utils import generate_random_pw
 from .exceptions import CredentialsError, ForgotError, RegisterError, ResetError, UpdateError
 
 from StreamlitAuth import ErrorHandling as eh
-from StreamlitAuth.encryptor import GenericEncryptor, GoogleEncryptor
+from StreamlitAuth.Encryptor import GenericEncryptor, GoogleEncryptor
 
 
 class Authenticate(object):
