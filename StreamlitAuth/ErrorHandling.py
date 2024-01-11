@@ -33,7 +33,7 @@ def add_dev_error(key: str, error: str) -> None:
         st.session_state.stauth = {}
     if 'dev_errors' not in st.session_state.stauth:
         st.session_state.stauth['dev_errors'] = {}
-    st.session_state.stauth.dev_errors[key] = error
+    st.session_state.stauth['dev_errors'][key] = error
 
 def add_user_error(key: str, error: str) -> None:
     """
@@ -50,4 +50,4 @@ def add_user_error(key: str, error: str) -> None:
         st.session_state.stauth = {}
     if 'user_errors' not in st.session_state.stauth:
         st.session_state.stauth['user_errors'] = {}
-    st.session_state.stauth.user_errors[key] = error
+    st.session_state.stauth['user_errors'][key] = error
