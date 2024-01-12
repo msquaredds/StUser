@@ -303,13 +303,12 @@ class Authenticate(object):
             else:
                 raise CredentialsError('password')
 
-    def _check_registered_user(
+    def _check_user_info(
             self, new_email: str, new_username: str, new_password: str,
             new_password_repeat: str, preauthorization: bool) -> bool:
         """
         Check whether the registering user input is valid.
         """
-        st.write("_check_registered_user")
         validator = Validator()
         # all fields must be filled
         if not (len(new_email) > 0 and len(new_username) > 0 and
@@ -386,10 +385,13 @@ class Authenticate(object):
             True: user must be preauthorized to register.
             False: any user can register.
         """
+        st.write("_register_credentials")
         # we want to add our new username and email so they can't be
         # accidentally registered again
         self.usernames.append(username)
+        st.write("usernames: ", self.usernames)
         self.emails.append(email)
+        st.write("emails: ", self.emails)
 
         # encrypt / hash info and add to credentials dictionary
         if encrypt_type.lower() == 'generic':
@@ -397,16 +399,21 @@ class Authenticate(object):
         elif encrypt_type.lower() == 'google':
             encryptor = GoogleEncryptor(kwargs)
         username = encryptor.encrypt(username)
+        st.write("username: ", username)
         email = encryptor.encrypt(email)
+        st.write("email: ", email)
         password = Hasher([password]).generate()[0]
+        st.write("password: ", password)
         self.user_credentials = {'username': username, 'email': email,
                                  'password': password}
+        st.write("user_credentials: ", self.user_credentials)
 
         # if we had the name preauthorized, remove it from that list
         if preauthorization:
             self.preauthorized.remove(email)
+            st.write("preauthorized: ", self.preauthorized)
 
-    def _check_register_user(
+    def _check_and_register_user(
             self, new_email: str, new_username: str, new_password: str,
             new_password_repeat: str, preauthorization: bool,
             encrypt_type: str, **kwargs) -> None:
@@ -414,8 +421,7 @@ class Authenticate(object):
         Once a new user submits their info, this is a callback to check
         the validity of their input and register them if valid.
         """
-        st.write("_check_register_user")
-        if self._check_registered_user(
+        if self._check_user_info(
                 new_email, new_username, new_password, new_password_repeat,
                 preauthorization):
             self._register_credentials(
@@ -451,6 +457,7 @@ class Authenticate(object):
             key_ring_id (string): ID of the Cloud KMS key ring (e.g. 'my-key-ring').
             key_id (string): ID of the key to use (e.g. 'my-key').
         """
+        eh.clear_errors()
         if location not in ['main', 'sidebar']:
             eh.add_dev_error(
                 'register_user',
@@ -483,7 +490,7 @@ class Authenticate(object):
                                                             type='password')
 
         register_user_form.form_submit_button(
-            'Register', on_click=self._check_register_user,
+            'Register', on_click=self._check_and_register_user,
             args=(new_email, new_username, new_password, new_password_repeat,
                   preauthorization, encrypt_type), kwargs=kwargs)
 
