@@ -309,9 +309,10 @@ class Authenticate(object):
         """
         Check whether the registering user input is valid.
         """
+        st.write("_check_registered_user")
         validator = Validator()
         # all fields must be filled
-        if not (len(new_email) and len(new_username) and
+        if not (len(new_email) > 0 and len(new_username) > 0 and
                 len(new_password) > 0):
             eh.add_user_error(
                 'register_user',
@@ -413,6 +414,7 @@ class Authenticate(object):
         Once a new user submits their info, this is a callback to check
         the validity of their input and register them if valid.
         """
+        st.write("_check_register_user")
         if self._check_registered_user(
                 new_email, new_username, new_password, new_password_repeat,
                 preauthorization):
