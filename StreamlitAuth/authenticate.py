@@ -426,7 +426,7 @@ class Authenticate(object):
                 preauthorization):
             self._register_credentials(
                 new_username, new_password, new_email, preauthorization,
-                encrypt_type, kwargs)
+                encrypt_type, **kwargs)
 
     def register_user(self, location: str = 'main',
                       preauthorization: bool = True,
