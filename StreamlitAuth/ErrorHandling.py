@@ -51,3 +51,14 @@ def add_user_error(key: str, error: str) -> None:
     if 'user_errors' not in st.session_state.stauth:
         st.session_state.stauth['user_errors'] = {}
     st.session_state.stauth['user_errors'][key] = error
+
+def clear_errors() -> None:
+    """
+    Clear all dev_errors and user_errors from
+        streamlit.session_state.stauth.
+    """
+    if 'stauth' in st.session_state:
+        if 'dev_errors' in st.session_state.stauth:
+            st.session_state.stauth['dev_errors'] = {}
+        if 'user_errors' in st.session_state.stauth:
+            st.session_state.stauth['user_errors'] = {}
