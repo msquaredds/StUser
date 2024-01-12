@@ -460,7 +460,7 @@ class Authenticate(object):
                     'register_user',
                     "preauthorization argument must not be None when "
                     "preauthorization is True")
-            return False
+                return False
         if encrypt_type.lower() not in ['generic', 'google']:
             eh.add_dev_error(
                 'register_user',
@@ -483,7 +483,7 @@ class Authenticate(object):
         register_user_form.form_submit_button(
             'Register', on_click=self._check_register_user,
             args=(new_email, new_username, new_password, new_password_repeat,
-                  preauthorization, encrypt_type, kwargs))
+                  preauthorization, encrypt_type), kwargs=kwargs)
 
     def _set_random_password(self, username: str) -> str:
         """
