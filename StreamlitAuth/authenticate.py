@@ -413,6 +413,8 @@ class Authenticate(object):
             self.preauthorized.remove(email)
             st.write("preauthorized: ", self.preauthorized)
 
+        st.stop()
+
     def _check_and_register_user(
             self, new_email: str, new_username: str, new_password: str,
             new_password_repeat: str, preauthorization: bool,
