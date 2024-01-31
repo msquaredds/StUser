@@ -398,24 +398,24 @@ class Authenticate(object):
             encryptor = GenericEncryptor()
         elif encrypt_type.lower() == 'google':
             st.write("kwargs: ", kwargs)
-            st.write("**kwargs: ", **kwargs)
             encryptor = GoogleEncryptor(**kwargs)
-        username = encryptor.encrypt(username)
-        st.write("username: ", username)
-        email = encryptor.encrypt(email)
-        st.write("email: ", email)
+        enc_username = encryptor.encrypt(username)
+        st.write("enc_username: ", enc_username)
+        enc_email = encryptor.encrypt(email)
+        st.write("enc_email: ", enc_email)
         password = Hasher([password]).generate()[0]
         st.write("password: ", password)
-        self.user_credentials = {'username': {'key': username[0],
-                                              'token': username[1]},
-                                 'email': {'key': email[0],
-                                           'token': email[1]},
+        self.user_credentials = {'username': {'key': enc_username[0],
+                                              'token': enc_username[1]},
+                                 'email': {'key': enc_email[0],
+                                           'token': enc_email[1]},
                                  'password': password}
         st.write("user_credentials: ", self.user_credentials)
 
         # if we had the name preauthorized, remove it from that list
         if preauthorization:
             st.write("preauthorized: ", self.preauthorized)
+            st.write("email: ", email)
             self.preauthorized.remove(email)
             st.write("preauthorized: ", self.preauthorized)
 
