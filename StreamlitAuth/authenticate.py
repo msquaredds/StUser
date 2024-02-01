@@ -399,6 +399,10 @@ class Authenticate(object):
         elif encrypt_type.lower() == 'google':
             st.write("kwargs: ", kwargs)
             encryptor = GoogleEncryptor(**kwargs)
+            st.write("encryptor.project_id: ", encryptor.project_id)
+            st.write("encryptor.location_id: ", encryptor.location_id)
+            st.write("encryptor.key_ring_id: ", encryptor.key_ring_id)
+            st.write("encryptor.key_id: ", encryptor.key_id)
         enc_username = encryptor.encrypt(username)
         st.write("enc_username: ", enc_username)
         enc_email = encryptor.encrypt(email)

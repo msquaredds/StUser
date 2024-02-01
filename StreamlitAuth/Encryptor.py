@@ -79,14 +79,17 @@ class GoogleEncryptor(object):
         """
         # Convert the plaintext to bytes.
         plaintext_bytes = plaintext.encode("utf-8")
+        st.write("plaintext_bytes: ", plaintext_bytes)
         # Compute plaintext's CRC32C.
         plaintext_crc32c = self._crc32c(plaintext_bytes)
+        st.write("plaintext_crc32c: ", plaintext_crc32c)
 
         # Create the client.
         client = kms.KeyManagementServiceClient()
         # Build the key name.
         key_name = client.crypto_key_path(self.project_id, self.location_id,
                                           self.key_ring_id, self.key_id)
+        st.write("key_name: ", key_name)
 
         # Call the API.
         encrypt_response = client.encrypt(
@@ -96,6 +99,7 @@ class GoogleEncryptor(object):
                 "plaintext_crc32c": plaintext_crc32c,
             }
         )
+        st.write("encrypt_response: ", encrypt_response)
 
         # Perform integrity verification on encrypt_response.
         # For more details on ensuring E2E in-transit integrity to and
