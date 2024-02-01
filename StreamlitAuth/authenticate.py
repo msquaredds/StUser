@@ -370,6 +370,12 @@ class Authenticate(object):
         """
         Adds to credentials dictionary the new user's information.
 
+        Note that for the generic version we get and store a key and
+        token for each username and email, while for the google version
+        we just get and store a ciphertext for each username and email
+        (the key is typically the same and is what is accessed by
+        passing in 'kms_credentials' through kwargs).
+
         Parameters
         ----------
         username: str
@@ -384,6 +390,36 @@ class Authenticate(object):
             The preauthorization requirement.
             True: user must be preauthorized to register.
             False: any user can register.
+        encrypt_type: str
+            The type of encryption to use for the user credentials.
+            'generic': Fernet symmetric encryption.
+            'google': Google Cloud KMS (Key Management Service) API.
+        **kwargs:
+            Additional arguments for the encryption. Currently only needed
+            if using 'google' encryption, in which case the following
+            arguments are required:
+            project_id (string): Google Cloud project ID (e.g. 'my-project').
+            location_id (string): Cloud KMS location (e.g. 'us-east1').
+            key_ring_id (string): ID of the Cloud KMS key ring (e.g. 'my-key-ring').
+            key_id (string): ID of the key to use (e.g. 'my-key').
+            kms_credentials (google.oauth2.service_account.Credentials): The
+                credentials to use for the KMS (Key Management Service).
+                This could be a service account key. For example, you can
+                set up a service account in the same google cloud project
+                that has the KMS. This service account must be
+                permissioned (at a minimum) as a "Cloud KMS CryptoKey
+                Encrypter/Decrypter" in order to use the KMS.
+
+                Example code to get the credentials (you must install
+                    google-auth-oauthlib and google-auth in your environment):
+                    from google.oauth2 import service_account
+                    # this is the necessary scope for the KMS
+                    scopes = ['https://www.googleapis.com/auth/cloudkms']
+                    # this is just a file that stores the key info (the
+                    # service account key, not the KMS key) in a JSON file
+                    our_credentials = 'service_account_key_file.json'
+                    creds = service_account.Credentials.from_service_account_file(
+                        our_credentials, scopes=scopes)
         """
         st.write("_register_credentials")
         # we want to add our new username and email so they can't be
@@ -397,23 +433,31 @@ class Authenticate(object):
         if encrypt_type.lower() == 'generic':
             encryptor = GenericEncryptor()
         elif encrypt_type.lower() == 'google':
-            st.write("kwargs: ", kwargs)
             encryptor = GoogleEncryptor(**kwargs)
-            st.write("encryptor.project_id: ", encryptor.project_id)
-            st.write("encryptor.location_id: ", encryptor.location_id)
-            st.write("encryptor.key_ring_id: ", encryptor.key_ring_id)
-            st.write("encryptor.key_id: ", encryptor.key_id)
+
         enc_username = encryptor.encrypt(username)
         st.write("enc_username: ", enc_username)
         enc_email = encryptor.encrypt(email)
         st.write("enc_email: ", enc_email)
         password = Hasher([password]).generate()[0]
         st.write("password: ", password)
-        self.user_credentials = {'username': {'key': enc_username[0],
-                                              'token': enc_username[1]},
-                                 'email': {'key': enc_email[0],
-                                           'token': enc_email[1]},
-                                 'password': password}
+
+        # store the credentials
+        # note that for the generic version we get and store a key and
+        # token for each username and email, while for the google version
+        # we just get and store a ciphertext for each username and email
+        # (the key is typically the same and is what is accessed by
+        # passing in 'kms_credentials' through kwargs)
+        if encrypt_type.lower() == 'generic':
+            self.user_credentials = {'username': {'key': enc_username[0],
+                                                  'token': enc_username[1]},
+                                     'email': {'key': enc_email[0],
+                                               'token': enc_email[1]},
+                                     'password': password}
+        elif encrypt_type.lower() == 'google':
+            self.user_credentials = {'username': enc_username['ciphertext'],
+                                     'email': enc_email['ciphertext'],
+                                     'password': password}
         st.write("user_credentials: ", self.user_credentials)
 
         # if we had the name preauthorized, remove it from that list
@@ -447,6 +491,12 @@ class Authenticate(object):
         """
         Creates a new user registration widget.
 
+        Note that for the generic version we get and store a key and
+        token for each username and email, while for the google version
+        we just get and store a ciphertext for each username and email
+        (the key is typically the same and is what is accessed by
+        passing in 'kms_credentials' through kwargs).
+
         Parameters
         ----------
         location: str
@@ -459,7 +509,7 @@ class Authenticate(object):
         encrypt_type: str
             The type of encryption to use for the user credentials.
             'generic': Fernet symmetric encryption.
-            'google': Google Cloud KMS API.
+            'google': Google Cloud KMS (Key Management Service) API.
         **kwargs:
             Additional arguments for the encryption. Currently only needed
             if using 'google' encryption, in which case the following
@@ -468,6 +518,24 @@ class Authenticate(object):
             location_id (string): Cloud KMS location (e.g. 'us-east1').
             key_ring_id (string): ID of the Cloud KMS key ring (e.g. 'my-key-ring').
             key_id (string): ID of the key to use (e.g. 'my-key').
+            kms_credentials (google.oauth2.service_account.Credentials): The
+                credentials to use for the KMS (Key Management Service).
+                This could be a service account key. For example, you can
+                set up a service account in the same google cloud project
+                that has the KMS. This service account must be
+                permissioned (at a minimum) as a "Cloud KMS CryptoKey
+                Encrypter/Decrypter" in order to use the KMS.
+
+                Example code to get the credentials (you must install
+                    google-auth-oauthlib and google-auth in your environment):
+                    from google.oauth2 import service_account
+                    # this is the necessary scope for the KMS
+                    scopes = ['https://www.googleapis.com/auth/cloudkms']
+                    # this is just a file that stores the key info (the
+                    # service account key, not the KMS key) in a JSON file
+                    our_credentials = 'service_account_key_file.json'
+                    creds = service_account.Credentials.from_service_account_file(
+                        our_credentials, scopes=scopes)
         """
         eh.clear_errors()
         if location not in ['main', 'sidebar']:

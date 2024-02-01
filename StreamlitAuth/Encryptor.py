@@ -2,7 +2,7 @@ import crcmod
 import base64
 
 from cryptography.fernet import Fernet
-from google.auth.credentials import Credentials
+from google.oauth2.service_account import Credentials
 from google.cloud import kms
 from typing import Tuple
 
@@ -44,6 +44,24 @@ class GoogleEncryptor(object):
     location_id (string): Cloud KMS location (e.g. 'us-east1').
     key_ring_id (string): ID of the Cloud KMS key ring (e.g. 'my-key-ring').
     key_id (string): ID of the key to use (e.g. 'my-key').
+    kms_credentials (google.oauth2.service_account.Credentials): The
+        credentials to use for the KMS (Key Management Service).
+        This could be a service account key. For example, you can
+        set up a service account in the same google cloud project
+        that has the KMS. This service account must be
+        permissioned (at a minimum) as a "Cloud KMS CryptoKey
+        Encrypter/Decrypter" in order to use the KMS.
+
+        Example code to get the credentials (you must install
+            google-auth-oauthlib and google-auth in your environment):
+            from google.oauth2 import service_account
+            # this is the necessary scope for the KMS
+            scopes = ['https://www.googleapis.com/auth/cloudkms']
+            # this is just a file that stores the key info (the
+            # service account key, not the KMS key) in a JSON file
+            our_credentials = 'service_account_key_file.json'
+            creds = service_account.Credentials.from_service_account_file(
+                our_credentials, scopes=scopes)
     """
     def __init__(
             self, project_id: str, location_id: str, key_ring_id: str,
@@ -135,7 +153,8 @@ class GoogleEncryptor(object):
             DecryptResponse: Response including plaintext.
         """
         # Create the client.
-        client = kms.KeyManagementServiceClient()
+        client = kms.KeyManagementServiceClient(
+            credentials=self.kms_credentials)
         # Build the key name.
         key_name = client.crypto_key_path(self.project_id, self.location_id,
                                           self.key_ring_id, self.key_id)
