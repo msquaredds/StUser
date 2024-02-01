@@ -2,6 +2,7 @@ import crcmod
 import base64
 
 from cryptography.fernet import Fernet
+from google.auth.credentials import Credentials
 from google.cloud import kms
 from typing import Tuple
 
@@ -44,8 +45,9 @@ class GoogleEncryptor(object):
     key_ring_id (string): ID of the Cloud KMS key ring (e.g. 'my-key-ring').
     key_id (string): ID of the key to use (e.g. 'my-key').
     """
-    def __init__(self, project_id: str, location_id: str, key_ring_id: str,
-                 key_id: str) -> None:
+    def __init__(
+            self, project_id: str, location_id: str, key_ring_id: str,
+            key_id: str, kms_credentials: Credentials) -> None:
         """
         Create a new instance of "GCPEncryptor".
         """
@@ -53,6 +55,7 @@ class GoogleEncryptor(object):
         self.location_id = location_id
         self.key_ring_id = key_ring_id
         self.key_id = key_id
+        self.kms_credentials = kms_credentials
 
     def _crc32c(self, data: bytes) -> int:
         """
@@ -86,7 +89,8 @@ class GoogleEncryptor(object):
         st.write("plaintext_crc32c: ", plaintext_crc32c)
 
         # Create the client.
-        client = kms.KeyManagementServiceClient()
+        client = kms.KeyManagementServiceClient(
+            credentials=self.kms_credentials)
         # Build the key name.
         key_name = client.crypto_key_path(self.project_id, self.location_id,
                                           self.key_ring_id, self.key_id)
