@@ -79,6 +79,7 @@ class GoogleEncryptor(object):
         """
         # Convert the plaintext to bytes.
         plaintext_bytes = plaintext.encode("utf-8")
+        import streamlit as st
         st.write("plaintext_bytes: ", plaintext_bytes)
         # Compute plaintext's CRC32C.
         plaintext_crc32c = self._crc32c(plaintext_bytes)
