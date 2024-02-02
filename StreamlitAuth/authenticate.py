@@ -455,6 +455,7 @@ class Authenticate(object):
                                                'token': enc_email[1]},
                                      'password': password}
         elif encrypt_type.lower() == 'google':
+            st.write("enc_username type: ", type(enc_username))
             self.user_credentials = {'username': enc_username['ciphertext'],
                                      'email': enc_email['ciphertext'],
                                      'password': password}
