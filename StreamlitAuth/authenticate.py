@@ -456,8 +456,8 @@ class Authenticate(object):
                                      'password': password}
         elif encrypt_type.lower() == 'google':
             st.write("enc_username type: ", type(enc_username))
-            self.user_credentials = {'username': enc_username['ciphertext'],
-                                     'email': enc_email['ciphertext'],
+            self.user_credentials = {'username': enc_username.ciphertext,
+                                     'email': enc_email.ciphertext,
                                      'password': password}
         st.write("user_credentials: ", self.user_credentials)
 
@@ -467,6 +467,13 @@ class Authenticate(object):
             st.write("email: ", email)
             self.preauthorized.remove(email)
             st.write("preauthorized: ", self.preauthorized)
+
+        # test decrypt
+        if encrypt_type.lower() == 'generic':
+            decrypted = encryptor.decrypt(enc_username[0], enc_username[1])
+        elif encrypt_type.lower() == 'google':
+            decrypted = encryptor.decrypt(enc_username.ciphertext)
+        st.write("decrypted: ", decrypted)
 
         st.stop()
 
