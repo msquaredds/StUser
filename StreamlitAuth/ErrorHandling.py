@@ -20,14 +20,10 @@ import streamlit as st
 
 def add_dev_error(key: str, error: str) -> None:
     """
-    Adds an error to the streamlit.session_state.dev_errors dictionary.
+    Adds an error to the st.session_state.stauth['dev_errors'] dictionary.
 
-    Parameters
-    ----------
-    key: str
-        The key for the error.
-    error: str
-        The error message to display.
+    :param key: The key for the error.
+    :param error: The error message to display.
     """
     if 'stauth' not in st.session_state:
         st.session_state.stauth = {}
@@ -37,14 +33,11 @@ def add_dev_error(key: str, error: str) -> None:
 
 def add_user_error(key: str, error: str) -> None:
     """
-    Adds an error to the streamlit.session_state.user_errors dictionary.
+    Adds an error to the st.session_state.stauth['user_errors']
+        dictionary.
 
-    Parameters
-    ----------
-    key: str
-        The key for the error.
-    error: str
-        The error message to display.
+    :param key: The key for the error.
+    :param error: The error message to display.
     """
     if 'stauth' not in st.session_state:
         st.session_state.stauth = {}

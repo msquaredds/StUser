@@ -6,8 +6,8 @@ import streamlit as st
 from datetime import datetime, timedelta
 from typing import Union
 
-from .hasher import Hasher
-from .validator import Validator
+from .Hasher import Hasher
+from .Validator import Validator
 from .utils import generate_random_pw
 from .exceptions import CredentialsError, ForgotError, RegisterError, ResetError, UpdateError
 
@@ -17,8 +17,8 @@ from StreamlitAuth.Encryptor import GenericEncryptor, GoogleEncryptor
 
 class Authenticate(object):
     """
-    This class will create register user, login, forgot password, forgot
-    username, reset password, reset username and logout methods.
+    Create register user, login, forgot password, forgot username,
+    reset password, reset username and logout methods/widgets.
 
     :method register_user: Creates a new user registration widget.
     """

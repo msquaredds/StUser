@@ -3,32 +3,23 @@ from argon2 import PasswordHasher
 
 class Hasher(object):
     """
-    This class will hash plain text passwords.
+    Hash plain text passwords.
     """
     def __init__(self, passwords: list):
         """
-        Create a new instance of "Hasher".
-
-        Parameters
-        ----------
-        passwords: list
-            The list of plain text passwords to be hashed.
+        :param passwords: The list of plain text passwords to be hashed.
         """
         self.passwords = passwords
+
         self.ph = PasswordHasher()
 
     def _hash(self, password: str) -> str:
         """
         Hashes the plain text password.
 
-        Parameters
-        ----------
-        password: str
-            The plain text password to be hashed.
-        Returns
-        -------
-        str
-            The hashed password.
+        :param password: The plain text password to be hashed.
+
+        :return: The hashed password.
         """
         return self.ph.hash(password)
 
@@ -36,9 +27,6 @@ class Hasher(object):
         """
         Hashes the list of plain text passwords.
 
-        Returns
-        -------
-        list
-            The list of hashed passwords.
+        :return: The list of hashed passwords.
         """
         return [self._hash(password) for password in self.passwords]

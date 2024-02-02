@@ -1,3 +1,7 @@
+"""
+This module provides classes for encrypting and decrypting messages.
+"""
+
 import crcmod
 import base64
 
@@ -14,24 +18,17 @@ class GenericEncryptor(object):
     Encrypt and decrypt messages using the Fernet symmetric encryption.
     """
     def __init__(self) -> None:
-        """
-        Create a new instance of "GenericEncryptor".
-        """
         pass
 
     def encrypt(self, plaintext: str) -> Tuple[bytes, bytes]:
-        """
-        Derive a symmetric key and encrypt the message.
-        """
+        """Derive a symmetric key and encrypt the message."""
         key = Fernet.generate_key()
         f = Fernet(key)
         token = f.encrypt(plaintext.encode("utf-8"))
         return key, token
 
     def decrypt(self, key: bytes, token: bytes) -> str:
-        """
-        Decrypt a message using the key.
-        """
+        """Decrypt a message using the key."""
         f = Fernet(key)
         plaintext = f.decrypt(token)
         return plaintext.decode("utf-8")
@@ -42,20 +39,22 @@ class GoogleEncryptor(object):
     Encrypt and decrypt messages using the Google API.
     project_id (string): Google Cloud project ID (e.g. 'my-project').
     location_id (string): Cloud KMS location (e.g. 'us-east1').
-    key_ring_id (string): ID of the Cloud KMS key ring (e.g. 'my-key-ring').
+    key_ring_id (string): ID of the Cloud KMS key ring (
+        e.g. 'my-key-ring').
     key_id (string): ID of the key to use (e.g. 'my-key').
-    kms_credentials (google.oauth2.service_account.Credentials): The
-        credentials to use for the KMS (Key Management Service).
-        This could be a service account key. For example, you can
-        set up a service account in the same google cloud project
-        that has the KMS. This service account must be
-        permissioned (at a minimum) as a "Cloud KMS CryptoKey
-        Encrypter/Decrypter" in order to use the KMS.
+    kms_credentials (google.oauth2.service_account.Credentials):
+        The credentials to use for the KMS (Key Management
+        Service).
+
+        For example, you can set up a service account in the same
+        google cloud project that has the KMS. This service
+        account must be permissioned (at a minimum) as a "Cloud
+        KMS CryptoKey Encrypter" in order to use the KMS here.
 
         Example code to get the credentials (you must install
-            google-auth-oauthlib and google-auth in your environment):
+            google-auth-oauthlib and google-auth in your
+            environment):
             from google.oauth2 import service_account
-            # this is the necessary scope for the KMS
             scopes = ['https://www.googleapis.com/auth/cloudkms']
             # this is just a file that stores the key info (the
             # service account key, not the KMS key) in a JSON file
@@ -66,9 +65,6 @@ class GoogleEncryptor(object):
     def __init__(
             self, project_id: str, location_id: str, key_ring_id: str,
             key_id: str, kms_credentials: Credentials) -> None:
-        """
-        Create a new instance of "GCPEncryptor".
-        """
         self.project_id = project_id
         self.location_id = location_id
         self.key_ring_id = key_ring_id
@@ -79,11 +75,11 @@ class GoogleEncryptor(object):
         """
         Calculates the CRC32C checksum of the provided data.
 
-        Args:
-            data: the bytes over which the checksum should be calculated.
+        :param data: The bytes over which the checksum should be
+            calculated.
 
-        Returns:
-            An int representing the CRC32C checksum of the provided bytes.
+        :return: An int representing the CRC32C checksum of the provided
+            bytes.
         """
         crc32c_fun = crcmod.predefined.mkPredefinedCrcFun("crc-32c")
         return crc32c_fun(data)
@@ -92,19 +88,15 @@ class GoogleEncryptor(object):
         """
         Encrypt plaintext using a symmetric key.
 
-        Args:
-            plaintext (string): message to encrypt
+        :param plaintext: Message to encrypt.
 
-        Returns:
-            bytes: Encrypted ciphertext.
+        :return encrypt_response: Encrypted ciphertext.
         """
         # Convert the plaintext to bytes.
         plaintext_bytes = plaintext.encode("utf-8")
-        import streamlit as st
-        st.write("plaintext_bytes: ", plaintext_bytes)
+
         # Compute plaintext's CRC32C.
         plaintext_crc32c = self._crc32c(plaintext_bytes)
-        st.write("plaintext_crc32c: ", plaintext_crc32c)
 
         # Create the client.
         client = kms.KeyManagementServiceClient(
@@ -112,7 +104,6 @@ class GoogleEncryptor(object):
         # Build the key name.
         key_name = client.crypto_key_path(self.project_id, self.location_id,
                                           self.key_ring_id, self.key_id)
-        st.write("key_name: ", key_name)
 
         # Call the API.
         encrypt_response = client.encrypt(
@@ -122,7 +113,6 @@ class GoogleEncryptor(object):
                 "plaintext_crc32c": plaintext_crc32c,
             }
         )
-        st.write("encrypt_response: ", encrypt_response)
 
         # Perform integrity verification on encrypt_response.
         # For more details on ensuring E2E in-transit integrity to and
@@ -146,11 +136,9 @@ class GoogleEncryptor(object):
         """
         Decrypt the ciphertext using the symmetric key
 
-        Args:
-            ciphertext (bytes): Encrypted bytes to decrypt.
+        :param ciphertext: Encrypted bytes to decrypt.
 
-        Returns:
-            DecryptResponse: Response including plaintext.
+        :return decrypt_response: Response including plaintext.
         """
         # Create the client.
         client = kms.KeyManagementServiceClient(
