@@ -17,50 +17,41 @@ from StreamlitAuth.Encryptor import GenericEncryptor, GoogleEncryptor
 
 class Authenticate(object):
     """
-    This class will create login, logout, register user, reset password, forgot password, 
-    forgot username, and modify user details widgets.
+    This class will create register user, login, forgot password, forgot
+    username, reset password, reset username and logout methods.
+
+    :method register_user: Creates a new user registration widget.
     """
     def __init__(self, usernames: list, emails: list, cookie_name: str,
                  cookie_key: str, cookie_expiry_days: float=30.0,
                  preauthorized: list=None, weak_passwords: list=[],
                  user_credentials: dict=None) -> None:
         """
-        Create a new instance of "Authenticate".
-
-        Parameters
-        ----------
-        usernames: list
-            The set of existing usernames.
-        emails: list
-            The set of existing emails.
-        cookie_name: str
-            The name of the JWT cookie stored on the client's browser for
-            passwordless reauthentication.
-        cookie_key: str
-            The key to be used for hashing the signature of the JWT
-            cookie.
-        cookie_expiry_days: float
-            The number of days before the cookie expires on the client's
-            browser.
-        preauthorized: list
-            The list of emails of unregistered users authorized to
-            register.
-        weak_passwords: list
-            The list of weak passwords that shouldn't be used. This isn't
-            required, but is recommended.
-        user_credentials: dict
-            The dictionary of user credentials as {'username': username,
-            'email': email, 'password': password}, with username and email
-            encrypted and password hashed.
+        :param usernames: The set of existing usernames.
+        :param emails: The set of existing emails.
+        :param cookie_name: The name of the JWT cookie stored on the
+            client's browser for passwordless reauthentication.
+        :param cookie_key: The key to be used for hashing the signature of
+            the JWT cookie.
+        :param cookie_expiry_days: The number of days before the cookie
+            expires on the client's browser.
+        :param preauthorized: The list of emails of unregistered users
+            authorized to register.
+        :param weak_passwords: The list of weak passwords that shouldn't
+            be used. This isn't required, but is recommended.
+        :param user_credentials: The dictionary of user credentials as
+            { 'username': username, 'email': email, 'password': password},
+            with username and email encrypted and password hashed.
         """
         self.usernames = [username.lower() for username in usernames]
         self.emails = emails
         self.cookie_name = cookie_name
         self.cookie_key = cookie_key
+        self.cookie_expiry_days = cookie_expiry_days
         self.preauthorized = preauthorized
         self.weak_passwords = weak_passwords
         self.user_credentials = user_credentials
-        self.cookie_expiry_days = cookie_expiry_days
+
         self.cookie_manager = stx.CookieManager()
 
         if 'stauth' not in st.session_state:
@@ -71,6 +62,280 @@ class Authenticate(object):
             st.session_state.stauth['username'] = None
         if 'logout' not in st.session_state.stauth:
             st.session_state.stauth['logout'] = None
+
+    def _check_user_info(
+            self, new_email: str, new_username: str, new_password: str,
+            new_password_repeat: str, preauthorization: bool) -> bool:
+        """
+        Check whether the registering user input is valid.
+
+        :param new_email: The new user's email.
+        :param new_username: The new user's username.
+        :param new_password: The new user's password.
+        :param new_password_repeat: The new user's repeated password.
+        :param preauthorization: The preauthorization requirement.
+            True: user must be preauthorized to register.
+            False: any user can register.
+        """
+        validator = Validator()
+        # all fields must be filled
+        if not (len(new_email) > 0 and len(new_username) > 0 and
+                len(new_password) > 0):
+            eh.add_user_error(
+                'register_user',
+                "Please enter an email, username and password.")
+            return False
+        # the email must not already be used
+        if new_email in self.emails:
+            eh.add_user_error(
+                'register_user',
+                "Email already taken, please use forgot username if this is "
+                "your email.")
+            return False
+        # the email must be of correct format
+        if not validator.validate_email(new_email):
+            eh.add_user_error(
+                'register_user',
+                "Email is not a valid format.")
+            return False
+        # the username must not already be used
+        if new_username in self.usernames:
+            eh.add_user_error(
+                'register_user',
+                "Username already taken.")
+            return False
+        # the username must be of correct format
+        if not validator.validate_username(new_username):
+            eh.add_user_error(
+                'register_user',
+                "Username must only include letters, numbers, '-' or '_' "
+                "and be between 1 and 20 characters long.")
+            return False
+        # the password must be secure enough
+        if not validator.validate_password(new_password, self.weak_passwords):
+            eh.add_user_error(
+                'register_user',
+                "Password must be between 8 and 64 characters, contain at "
+                "least one uppercase letter, one lowercase letter, one "
+                "number, and one special character.")
+            return False
+        # the password must be repeated correctly
+        if new_password != new_password_repeat:
+            eh.add_user_error(
+                'register_user',
+                "Passwords do not match.")
+            return False
+        # the user must be preauthorized if preauthorization is True
+        if preauthorization and new_email not in self.preauthorized:
+            eh.add_user_error(
+                'register_user',
+                "User not preauthorized to register.")
+            return False
+        return True
+
+    def _register_credentials(self, username: str, password: str,
+                              email: str, preauthorization: bool,
+                              encrypt_type: str, **kwargs) -> None:
+        """
+        Adds to credentials dictionary the new user's information.
+
+        Note that for the generic version we get and store a key and
+        token for each username and email, while for the google version
+        we just get and store a ciphertext for each username and email
+        (the key is typically the same and is what is accessed by
+        passing in 'kms_credentials' through kwargs).
+
+        :param username: The username of the new user.
+        :param password: The password of the new user.
+        :param email: The email of the new user.
+        :param preauthorization: The preauthorization requirement.
+            True: user must be preauthorized to register.
+            False: any user can register.
+        :param encrypt_type: The type of encryption to use for the user
+            credentials.
+            'generic': Fernet symmetric encryption.
+            'google': Google Cloud KMS (Key Management Service) API.
+        :param **kwargs: Additional arguments for the encryption.
+            Currently only needed if using 'google' encryption, in which
+            case the following arguments are required:
+            project_id (string): Google Cloud project ID
+            (e.g. 'my-project').
+            location_id (string): Cloud KMS location (e.g. 'us-east1').
+            key_ring_id (string): ID of the Cloud KMS key ring
+            (e.g. 'my-key-ring').
+            key_id (string): ID of the key to use (e.g. 'my-key').
+            kms_credentials (google.oauth2.service_account.Credentials):
+                The credentials to use for the KMS (Key Management
+                Service).
+
+                For example, you can set up a service account in the same
+                google cloud project that has the KMS. This service
+                account must be permissioned (at a minimum) as a "Cloud
+                KMS CryptoKey Encrypter" in order to use the KMS here.
+
+                Example code to get the credentials (you must install
+                    google-auth-oauthlib and google-auth in your
+                    environment):
+                    from google.oauth2 import service_account
+                    scopes = ['https://www.googleapis.com/auth/cloudkms']
+                    # this is just a file that stores the key info (the
+                    # service account key, not the KMS key) in a JSON file
+                    our_credentials = 'service_account_key_file.json'
+                    creds = service_account.Credentials.from_service_account_file(
+                        our_credentials, scopes=scopes)
+        """
+        # we want to add our new username and email to the instance of the
+        # class, so they can't be accidentally registered again
+        self.usernames.append(username)
+        self.emails.append(email)
+
+        # encrypt / hash info
+        if encrypt_type.lower() == 'generic':
+            encryptor = GenericEncryptor()
+        elif encrypt_type.lower() == 'google':
+            encryptor = GoogleEncryptor(**kwargs)
+        enc_username = encryptor.encrypt(username)
+        enc_email = encryptor.encrypt(email)
+        password = Hasher([password]).generate()[0]
+
+        # store the credentials
+        # note that for the generic version we get and store a key and
+        # token for each username and email, while for the google version
+        # we just get and store a ciphertext for each username and email
+        # (the key is typically the same and is what is accessed by
+        # passing in 'kms_credentials' through kwargs)
+        if encrypt_type.lower() == 'generic':
+            self.user_credentials = {'username': {'key': enc_username[0],
+                                                  'token': enc_username[1]},
+                                     'email': {'key': enc_email[0],
+                                               'token': enc_email[1]},
+                                     'password': password}
+        elif encrypt_type.lower() == 'google':
+            self.user_credentials = {'username': enc_username.ciphertext,
+                                     'email': enc_email.ciphertext,
+                                     'password': password}
+
+        # if we had the name preauthorized, remove it from that list
+        if preauthorization:
+            self.preauthorized.remove(email)
+
+    def _check_and_register_user(
+            self, new_email: str, new_username: str, new_password: str,
+            new_password_repeat: str, preauthorization: bool,
+            encrypt_type: str, **kwargs) -> None:
+        """
+        Once a new user submits their info, this is a callback to check
+        the validity of their input and register them if valid.
+
+        :param new_email: The new user's email.
+        :param new_username: The new user's username.
+        :param new_password: The new user's password.
+        :param new_password_repeat: The new user's repeated password.
+        :param preauthorization: The preauthorization requirement.
+            True: user must be preauthorized to register.
+            False: any user can register.
+        :param encrypt_type: The type of encryption to use for the user
+            credentials.
+            'generic': Fernet symmetric encryption.
+            'google': Google Cloud KMS (Key Management Service) API.
+        :param **kwargs: Additional arguments for the encryption.
+            Currently only needed if using 'google' encryption. See
+            the docstring for register_user for more information.
+        """
+        if self._check_user_info(
+                new_email, new_username, new_password, new_password_repeat,
+                preauthorization):
+            self._register_credentials(
+                new_username, new_password, new_email, preauthorization,
+                encrypt_type, **kwargs)
+
+    def register_user(self, location: str = 'main',
+                      preauthorization: bool = True,
+                      encrypt_type: str = 'google',
+                      **kwargs) -> None:
+        """
+        Creates a new user registration widget.
+
+        Note that for the generic version we get and store a key and
+        token for each username and email, while for the google version
+        we just get and store a ciphertext for each username and email
+        (the key is typically the same for all encrypted texts and is what
+        is accessed by passing in 'kms_credentials' through kwargs).
+
+        :param location: The location of the register new user form i.e.
+            main or sidebar.
+        :param preauthorization: The preauthorization requirement.
+            True: user must be preauthorized to register.
+            False: any user can register.
+        :param encrypt_type: The type of encryption to use for the user
+            credentials.
+            'generic': Fernet symmetric encryption.
+            'google': Google Cloud KMS (Key Management Service) API.
+        :param **kwargs: Additional arguments for the encryption.
+            Currently only needed if using 'google' encryption, in which
+            case the following arguments are required:
+            project_id (string): Google Cloud project ID
+            (e.g. 'my-project').
+            location_id (string): Cloud KMS location (e.g. 'us-east1').
+            key_ring_id (string): ID of the Cloud KMS key ring
+            (e.g. 'my-key-ring').
+            key_id (string): ID of the key to use (e.g. 'my-key').
+            kms_credentials (google.oauth2.service_account.Credentials):
+                The credentials to use for the KMS (Key Management
+                Service).
+
+                For example, you can set up a service account in the same
+                google cloud project that has the KMS. This service
+                account must be permissioned (at a minimum) as a "Cloud
+                KMS CryptoKey Encrypter" in order to use the KMS here.
+
+                Example code to get the credentials (you must install
+                    google-auth-oauthlib and google-auth in your
+                    environment):
+                    from google.oauth2 import service_account
+                    scopes = ['https://www.googleapis.com/auth/cloudkms']
+                    # this is just a file that stores the key info (the
+                    # service account key, not the KMS key) in a JSON file
+                    our_credentials = 'service_account_key_file.json'
+                    creds = service_account.Credentials.from_service_account_file(
+                        our_credentials, scopes=scopes)
+        """
+        eh.clear_errors()
+        if location not in ['main', 'sidebar']:
+            eh.add_dev_error(
+                'register_user',
+                "location argument must be one of 'main' or 'sidebar'")
+            return False
+        if preauthorization:
+            if not self.preauthorized:
+                eh.add_dev_error(
+                    'register_user',
+                    "preauthorization argument must not be None when "
+                    "preauthorization is True")
+                return False
+        if encrypt_type.lower() not in ['generic', 'google']:
+            eh.add_dev_error(
+                'register_user',
+                "encrypt_type argument must be one of 'generic' or 'google'")
+            return False
+
+        if location == 'main':
+            register_user_form = st.form('Register user')
+        elif location == 'sidebar':
+            register_user_form = st.sidebar.form('Register user')
+
+        register_user_form.subheader('Register user')
+        new_email = register_user_form.text_input('Email')
+        new_username = register_user_form.text_input('Username').lower()
+        new_password = register_user_form.text_input('Password',
+                                                     type='password')
+        new_password_repeat = register_user_form.text_input('Repeat password',
+                                                            type='password')
+
+        register_user_form.form_submit_button(
+            'Register', on_click=self._check_and_register_user,
+            args=(new_email, new_username, new_password, new_password_repeat,
+                  preauthorization, encrypt_type), kwargs=kwargs)
 
     def _token_encode(self) -> str:
         """
@@ -302,285 +567,6 @@ class Authenticate(object):
                     raise ResetError('No new password provided')
             else:
                 raise CredentialsError('password')
-
-    def _check_user_info(
-            self, new_email: str, new_username: str, new_password: str,
-            new_password_repeat: str, preauthorization: bool) -> bool:
-        """
-        Check whether the registering user input is valid.
-        """
-        validator = Validator()
-        # all fields must be filled
-        if not (len(new_email) > 0 and len(new_username) > 0 and
-                len(new_password) > 0):
-            eh.add_user_error(
-                'register_user',
-                "Please enter an email, username and password.")
-            return False
-        # the email must not already be used
-        if new_email in self.emails:
-            eh.add_user_error(
-                'register_user',
-                "Email already taken, please use forgot username if this is "
-                "your email.")
-            return False
-        # the email must be of correct format
-        if not validator.validate_email(new_email):
-            eh.add_user_error(
-                'register_user',
-                "Email is not a valid format.")
-            return False
-        # the username must not already be used
-        if new_username in self.usernames:
-            eh.add_user_error(
-                'register_user',
-                "Username already taken.")
-            return False
-        # the username must be of correct format
-        if not validator.validate_username(new_username):
-            eh.add_user_error(
-                'register_user',
-                "Username must only include letters, numbers, '-' or '_' "
-                "and be between 1 and 20 characters long.")
-            return False
-        # the password must be secure enough
-        if not validator.validate_password(new_password, self.weak_passwords):
-            eh.add_user_error(
-                'register_user',
-                "Password must be between 8 and 64 characters, contain at "
-                "least one uppercase letter, one lowercase letter, one "
-                "number, and one special character.")
-            return False
-        # the password must be repeated correctly
-        if new_password != new_password_repeat:
-            eh.add_user_error(
-                'register_user',
-                "Passwords do not match.")
-            return False
-        if preauthorization and new_email not in self.preauthorized:
-            eh.add_user_error(
-                'register_user',
-                "User not preauthorized to register.")
-            return False
-        return True
-
-    def _register_credentials(self, username: str, password: str,
-                              email: str, preauthorization: bool,
-                              encrypt_type: str, **kwargs) -> None:
-        """
-        Adds to credentials dictionary the new user's information.
-
-        Note that for the generic version we get and store a key and
-        token for each username and email, while for the google version
-        we just get and store a ciphertext for each username and email
-        (the key is typically the same and is what is accessed by
-        passing in 'kms_credentials' through kwargs).
-
-        Parameters
-        ----------
-        username: str
-            The username of the new user.
-        name: str
-            The name of the new user.
-        password: str
-            The password of the new user.
-        email: str
-            The email of the new user.
-        preauthorization: bool
-            The preauthorization requirement.
-            True: user must be preauthorized to register.
-            False: any user can register.
-        encrypt_type: str
-            The type of encryption to use for the user credentials.
-            'generic': Fernet symmetric encryption.
-            'google': Google Cloud KMS (Key Management Service) API.
-        **kwargs:
-            Additional arguments for the encryption. Currently only needed
-            if using 'google' encryption, in which case the following
-            arguments are required:
-            project_id (string): Google Cloud project ID (e.g. 'my-project').
-            location_id (string): Cloud KMS location (e.g. 'us-east1').
-            key_ring_id (string): ID of the Cloud KMS key ring (e.g. 'my-key-ring').
-            key_id (string): ID of the key to use (e.g. 'my-key').
-            kms_credentials (google.oauth2.service_account.Credentials): The
-                credentials to use for the KMS (Key Management Service).
-                This could be a service account key. For example, you can
-                set up a service account in the same google cloud project
-                that has the KMS. This service account must be
-                permissioned (at a minimum) as a "Cloud KMS CryptoKey
-                Encrypter/Decrypter" in order to use the KMS.
-
-                Example code to get the credentials (you must install
-                    google-auth-oauthlib and google-auth in your environment):
-                    from google.oauth2 import service_account
-                    # this is the necessary scope for the KMS
-                    scopes = ['https://www.googleapis.com/auth/cloudkms']
-                    # this is just a file that stores the key info (the
-                    # service account key, not the KMS key) in a JSON file
-                    our_credentials = 'service_account_key_file.json'
-                    creds = service_account.Credentials.from_service_account_file(
-                        our_credentials, scopes=scopes)
-        """
-        st.write("_register_credentials")
-        # we want to add our new username and email so they can't be
-        # accidentally registered again
-        self.usernames.append(username)
-        st.write("usernames: ", self.usernames)
-        self.emails.append(email)
-        st.write("emails: ", self.emails)
-
-        # encrypt / hash info and add to credentials dictionary
-        if encrypt_type.lower() == 'generic':
-            encryptor = GenericEncryptor()
-        elif encrypt_type.lower() == 'google':
-            encryptor = GoogleEncryptor(**kwargs)
-
-        enc_username = encryptor.encrypt(username)
-        st.write("enc_username: ", enc_username)
-        enc_email = encryptor.encrypt(email)
-        st.write("enc_email: ", enc_email)
-        password = Hasher([password]).generate()[0]
-        st.write("password: ", password)
-
-        # store the credentials
-        # note that for the generic version we get and store a key and
-        # token for each username and email, while for the google version
-        # we just get and store a ciphertext for each username and email
-        # (the key is typically the same and is what is accessed by
-        # passing in 'kms_credentials' through kwargs)
-        if encrypt_type.lower() == 'generic':
-            self.user_credentials = {'username': {'key': enc_username[0],
-                                                  'token': enc_username[1]},
-                                     'email': {'key': enc_email[0],
-                                               'token': enc_email[1]},
-                                     'password': password}
-        elif encrypt_type.lower() == 'google':
-            st.write("enc_username type: ", type(enc_username))
-            self.user_credentials = {'username': enc_username.ciphertext,
-                                     'email': enc_email.ciphertext,
-                                     'password': password}
-        st.write("user_credentials: ", self.user_credentials)
-
-        # if we had the name preauthorized, remove it from that list
-        if preauthorization:
-            st.write("preauthorized: ", self.preauthorized)
-            st.write("email: ", email)
-            self.preauthorized.remove(email)
-            st.write("preauthorized: ", self.preauthorized)
-
-        # test decrypt
-        if encrypt_type.lower() == 'generic':
-            decrypted = encryptor.decrypt(enc_username[0], enc_username[1])
-        elif encrypt_type.lower() == 'google':
-            decrypted = encryptor.decrypt(enc_username.ciphertext)
-        st.write("decrypted: ", decrypted)
-
-        st.stop()
-
-    def _check_and_register_user(
-            self, new_email: str, new_username: str, new_password: str,
-            new_password_repeat: str, preauthorization: bool,
-            encrypt_type: str, **kwargs) -> None:
-        """
-        Once a new user submits their info, this is a callback to check
-        the validity of their input and register them if valid.
-        """
-        if self._check_user_info(
-                new_email, new_username, new_password, new_password_repeat,
-                preauthorization):
-            self._register_credentials(
-                new_username, new_password, new_email, preauthorization,
-                encrypt_type, **kwargs)
-
-    def register_user(self, location: str = 'main',
-                      preauthorization: bool = True,
-                      encrypt_type: str = 'google',
-                      **kwargs) -> Union[bool, None]:
-        """
-        Creates a new user registration widget.
-
-        Note that for the generic version we get and store a key and
-        token for each username and email, while for the google version
-        we just get and store a ciphertext for each username and email
-        (the key is typically the same and is what is accessed by
-        passing in 'kms_credentials' through kwargs).
-
-        Parameters
-        ----------
-        location: str
-            The location of the register new user form i.e. main or
-            sidebar.
-        preauthorization: bool
-            The preauthorization requirement.
-            True: user must be preauthorized to register.
-            False: any user can register.
-        encrypt_type: str
-            The type of encryption to use for the user credentials.
-            'generic': Fernet symmetric encryption.
-            'google': Google Cloud KMS (Key Management Service) API.
-        **kwargs:
-            Additional arguments for the encryption. Currently only needed
-            if using 'google' encryption, in which case the following
-            arguments are required:
-            project_id (string): Google Cloud project ID (e.g. 'my-project').
-            location_id (string): Cloud KMS location (e.g. 'us-east1').
-            key_ring_id (string): ID of the Cloud KMS key ring (e.g. 'my-key-ring').
-            key_id (string): ID of the key to use (e.g. 'my-key').
-            kms_credentials (google.oauth2.service_account.Credentials): The
-                credentials to use for the KMS (Key Management Service).
-                This could be a service account key. For example, you can
-                set up a service account in the same google cloud project
-                that has the KMS. This service account must be
-                permissioned (at a minimum) as a "Cloud KMS CryptoKey
-                Encrypter/Decrypter" in order to use the KMS.
-
-                Example code to get the credentials (you must install
-                    google-auth-oauthlib and google-auth in your environment):
-                    from google.oauth2 import service_account
-                    # this is the necessary scope for the KMS
-                    scopes = ['https://www.googleapis.com/auth/cloudkms']
-                    # this is just a file that stores the key info (the
-                    # service account key, not the KMS key) in a JSON file
-                    our_credentials = 'service_account_key_file.json'
-                    creds = service_account.Credentials.from_service_account_file(
-                        our_credentials, scopes=scopes)
-        """
-        eh.clear_errors()
-        if location not in ['main', 'sidebar']:
-            eh.add_dev_error(
-                'register_user',
-                "location argument must be one of 'main' or 'sidebar'")
-            return False
-        if preauthorization:
-            if not self.preauthorized:
-                eh.add_dev_error(
-                    'register_user',
-                    "preauthorization argument must not be None when "
-                    "preauthorization is True")
-                return False
-        if encrypt_type.lower() not in ['generic', 'google']:
-            eh.add_dev_error(
-                'register_user',
-                "encrypt_type argument must be one of 'generic' or 'google'")
-            return False
-
-        if location == 'main':
-            register_user_form = st.form('Register user')
-        elif location == 'sidebar':
-            register_user_form = st.sidebar.form('Register user')
-
-        register_user_form.subheader('Register user')
-        new_email = register_user_form.text_input('Email')
-        new_username = register_user_form.text_input('Username').lower()
-        new_password = register_user_form.text_input('Password',
-                                                     type='password')
-        new_password_repeat = register_user_form.text_input('Repeat password',
-                                                            type='password')
-
-        register_user_form.form_submit_button(
-            'Register', on_click=self._check_and_register_user,
-            args=(new_email, new_username, new_password, new_password_repeat,
-                  preauthorization, encrypt_type), kwargs=kwargs)
 
     def _set_random_password(self, username: str) -> str:
         """
