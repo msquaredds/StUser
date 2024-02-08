@@ -22,35 +22,36 @@ class Authenticate(object):
 
     :method register_user: Creates a new user registration widget.
     """
-    def __init__(self, usernames: list, emails: list, cookie_name: str,
-                 cookie_key: str, cookie_expiry_days: float=30.0,
-                 preauthorized: list=None, weak_passwords: list=[],
-                 user_credentials: dict=None) -> None:
+    def __init__(self, usernames: list, emails: list,
+                 preauthorized: list = None,
+                 weak_passwords: list = [], user_credentials: dict = None,
+                 cookie_name: str=None, cookie_key: str=None,
+                 cookie_expiry_days: float=30.0,) -> None:
         """
         :param usernames: The set of existing usernames.
         :param emails: The set of existing emails.
+        :param preauthorized: The list of emails of unregistered users
+            authorized to register.
+        :param weak_passwords: The list of weak passwords that shouldn't
+            be used. This isn't required, but is recommended.
+        :param user_credentials: The dictionary of user credentials as
+            {'username': username, 'email': email, 'password': password},
+            with username and email encrypted and password hashed.
         :param cookie_name: The name of the JWT cookie stored on the
             client's browser for passwordless reauthentication.
         :param cookie_key: The key to be used for hashing the signature of
             the JWT cookie.
         :param cookie_expiry_days: The number of days before the cookie
             expires on the client's browser.
-        :param preauthorized: The list of emails of unregistered users
-            authorized to register.
-        :param weak_passwords: The list of weak passwords that shouldn't
-            be used. This isn't required, but is recommended.
-        :param user_credentials: The dictionary of user credentials as
-            { 'username': username, 'email': email, 'password': password},
-            with username and email encrypted and password hashed.
         """
         self.usernames = [username.lower() for username in usernames]
         self.emails = emails
-        self.cookie_name = cookie_name
-        self.cookie_key = cookie_key
-        self.cookie_expiry_days = cookie_expiry_days
         self.preauthorized = preauthorized
         self.weak_passwords = weak_passwords
         self.user_credentials = user_credentials
+        self.cookie_name = cookie_name
+        self.cookie_key = cookie_key
+        self.cookie_expiry_days = cookie_expiry_days
 
         self.cookie_manager = stx.CookieManager()
 
@@ -220,17 +221,21 @@ class Authenticate(object):
             self.preauthorized.remove(email)
 
     def _check_and_register_user(
-            self, new_email: str, new_username: str, new_password: str,
-            new_password_repeat: str, preauthorization: bool,
-            encrypt_type: str, **kwargs) -> None:
+            self, email_text_key: str, username_text_key: str,
+            password_text_key: str, repeat_password_text_key: str,
+            preauthorization: bool, encrypt_type: str, **kwargs) -> None:
         """
         Once a new user submits their info, this is a callback to check
         the validity of their input and register them if valid.
 
-        :param new_email: The new user's email.
-        :param new_username: The new user's username.
-        :param new_password: The new user's password.
-        :param new_password_repeat: The new user's repeated password.
+        :param new_email: The session state name to access the new user's
+            email.
+        :param new_username: The session state name to access the new
+            user's username.
+        :param new_password: The session state name to access the new
+            user's password.
+        :param new_password_repeat: The session state name to access the
+            new user's repeated password.
         :param preauthorization: The preauthorization requirement.
             True: user must be preauthorized to register.
             False: any user can register.
@@ -242,6 +247,10 @@ class Authenticate(object):
             Currently only needed if using 'google' encryption. See
             the docstring for register_user for more information.
         """
+        new_email = st.session_state[email_text_key]
+        new_username = st.session_state[username_text_key]
+        new_password = st.session_state[password_text_key]
+        new_password_repeat = st.session_state[repeat_password_text_key]
         if self._check_user_info(
                 new_email, new_username, new_password, new_password_repeat,
                 preauthorization):
@@ -252,6 +261,11 @@ class Authenticate(object):
     def register_user(self, location: str = 'main',
                       preauthorization: bool = True,
                       encrypt_type: str = 'google',
+                      email_text_key: str = 'register_user_email',
+                      username_text_key: str = 'register_user_username',
+                      password_text_key: str = 'register_user_password',
+                      repeat_password_text_key: str =
+                      'register_user_repeat_password',
                       **kwargs) -> None:
         """
         Creates a new user registration widget.
@@ -271,6 +285,22 @@ class Authenticate(object):
             credentials.
             'generic': Fernet symmetric encryption.
             'google': Google Cloud KMS (Key Management Service) API.
+        :param email_text_key: The key for the email text input on the
+            registration form. We attempt to default to a unique key, but
+            you can put your own in here if you want to customize it or
+            have clashes with other keys/forms.
+        :param username_text_key: The key for the username text input on
+            the registration form. We attempt to default to a unique key,
+            but you can put your own in here if you want to customize it
+            or have clashes with other keys/forms.
+        :param password_text_key: The key for the password text input on
+            the registration form. We attempt to default to a unique key,
+            but you can put your own in here if you want to customize it
+            or have clashes with other keys/forms.
+        :param repeat_password_text_key: The key for the repeat password
+            text input on the registration form. We attempt to default to
+            a unique key, but you can put your own in here if you want to
+            customize it or have clashes with other keys/forms.
         :param **kwargs: Additional arguments for the encryption.
             Currently only needed if using 'google' encryption, in which
             case the following arguments are required:
@@ -325,17 +355,24 @@ class Authenticate(object):
             register_user_form = st.sidebar.form('Register user')
 
         register_user_form.subheader('Register user')
-        new_email = register_user_form.text_input('Email')
-        new_username = register_user_form.text_input('Username').lower()
-        new_password = register_user_form.text_input('Password',
-                                                     type='password')
-        new_password_repeat = register_user_form.text_input('Repeat password',
-                                                            type='password')
+        # we need keys for all of these so they can be accessed in the
+        # callback through session_state (such as
+        # st.session_state['register_user_email'])
+        new_email = register_user_form.text_input(
+            'Email', key=email_text_key)
+        new_username = register_user_form.text_input(
+            'Username', key=username_text_key).lower()
+        new_password = register_user_form.text_input(
+            'Password', type='password', key=password_text_key)
+        new_password_repeat = register_user_form.text_input(
+            'Repeat password', type='password',
+            key=repeat_password_text_key)
 
         register_user_form.form_submit_button(
             'Register', on_click=self._check_and_register_user,
-            args=(new_email, new_username, new_password, new_password_repeat,
-                  preauthorization, encrypt_type), kwargs=kwargs)
+            args=(email_text_key, username_text_key, password_text_key,
+                  repeat_password_text_key, preauthorization, encrypt_type),
+            kwargs=kwargs)
 
     def _token_encode(self) -> str:
         """
