@@ -22,21 +22,47 @@ class Authenticate(object):
 
     :method register_user: Creates a new user registration widget.
     """
-    def __init__(self, usernames: list, emails: list,
-                 preauthorized: list = None,
-                 weak_passwords: list = [], user_credentials: dict = None,
+    def __init__(self, usernames_session_state: str,
+                 emails_session_state: str,
+                 preauthorized_session_state: str = None,
+                 user_credentials_session_state: str = None,
+                 weak_passwords: list = [],
                  cookie_name: str=None, cookie_key: str=None,
                  cookie_expiry_days: float=30.0,) -> None:
         """
-        :param usernames: The set of existing usernames.
-        :param emails: The set of existing emails.
-        :param preauthorized: The list of emails of unregistered users
-            authorized to register.
+        :param usernames_session_state: The session state name to access
+            the LIST of existing usernames (st.session_state[
+            usernames_session_state]). These should be saved into the
+            session state before instantiating this class. We use session
+            state since we want to be able to update the list of usernames
+            with the methods of this class and want the updated list to
+            persist.
+        :param emails_session_state: The session state name to access the
+            LIST of existing emails (st.session_state[
+            emails_session_state]). These should be saved into the session
+            state before instantiating this class. We use session state
+            since we want to be able to update the list of emails
+            with the methods of this class and want the updated list to
+            persist.
+        :param preauthorized_session_state: The session state name to
+            access the LIST of emails of unregistered users authorized to
+            register (st.session_state[preauthorized_session_state]).
+            These should be saved into the session state before
+            instantiating this class. We use session state since we want
+            to be able to update the list of emails with the methods of
+            this class and want the updated list to persist.
+        :param user_credentials_session_state: The session state name to
+            access the DICTIONARY of user credentials as
+            {'username': username, 'email': email, 'password': password},
+            with username and email encrypted and password hashed
+            (st.session_state[user_credentials_session_state]). These
+            are defined within the methods of this class and do not need
+            to be saved into the session state before instantiating this
+            class. We use session state since we want to be able to update
+            the dictionary of user credentials with the methods of this
+            class and want the updated dictionary to persist.
         :param weak_passwords: The list of weak passwords that shouldn't
             be used. This isn't required, but is recommended.
-        :param user_credentials: The dictionary of user credentials as
-            {'username': username, 'email': email, 'password': password},
-            with username and email encrypted and password hashed.
         :param cookie_name: The name of the JWT cookie stored on the
             client's browser for passwordless reauthentication.
         :param cookie_key: The key to be used for hashing the signature of
@@ -44,11 +70,11 @@ class Authenticate(object):
         :param cookie_expiry_days: The number of days before the cookie
             expires on the client's browser.
         """
-        self.usernames = [username.lower() for username in usernames]
-        self.emails = emails
-        self.preauthorized = preauthorized
+        self.usernames_session_state = usernames_session_state
+        self.emails_session_state = emails_session_state
+        self.preauthorized_session_state = preauthorized_session_state
+        self.user_credentials_session_state = user_credentials_session_state
         self.weak_passwords = weak_passwords
-        self.user_credentials = user_credentials
         self.cookie_name = cookie_name
         self.cookie_key = cookie_key
         self.cookie_expiry_days = cookie_expiry_days
@@ -63,6 +89,59 @@ class Authenticate(object):
             st.session_state.stauth['username'] = None
         if 'logout' not in st.session_state.stauth:
             st.session_state.stauth['logout'] = None
+
+    def _check_register_user_session_states(
+            self, preauthorization: bool) -> bool:
+        """
+        Check on whether all session state inputs for register_user exist
+        and are the correct type.
+        """
+        if self.usernames_session_state not in st.session_state or \
+                not isinstance(st.session_state[self.usernames_session_state],
+                               (list, set)):
+            eh.add_dev_error(
+                'register_user',
+                "usernames_session_state must be a list or set "
+                "assigned to st.session_state[usernames_session_state]")
+            return False
+        if self.emails_session_state not in st.session_state or \
+                not isinstance(st.session_state[self.emails_session_state],
+                               (list, set)):
+            eh.add_dev_error(
+                'register_user',
+                "emails_session_state must be a list or set assigned to "
+                "st.session_state[emails_session_state]")
+            return False
+        if preauthorization:
+            if self.preauthorized_session_state not in st.session_state or \
+                    not isinstance(st.session_state[
+                                       self.preauthorized_session_state],
+                                   (list, set)):
+                eh.add_dev_error(
+                    'register_user',
+                    "preauthorized_session_state must be a list or set "
+                    "assigned to st.session_state["
+                    "preauthorized_session_state]")
+                return False
+        return True
+
+    def _check_register_user_inputs(self, location: str,
+                                    encrypt_type: str) -> bool:
+        """
+        Check whether the register_user inputs are within the correct set
+        of options.
+        """
+        if location not in ['main', 'sidebar']:
+            eh.add_dev_error(
+                'register_user',
+                "location argument must be one of 'main' or 'sidebar'")
+            return False
+        if encrypt_type.lower() not in ['generic', 'google']:
+            eh.add_dev_error(
+                'register_user',
+                "encrypt_type argument must be one of 'generic' or 'google'")
+            return False
+        return True
 
     def _check_user_info(
             self, new_email: str, new_username: str, new_password: str,
@@ -100,7 +179,7 @@ class Authenticate(object):
                 "Email is not a valid format.")
             return False
         # the username must not already be used
-        if new_username in self.usernames:
+        if new_username in st.session_state[self.usernames_session_state]:
             eh.add_user_error(
                 'register_user',
                 "Username already taken.")
@@ -127,7 +206,8 @@ class Authenticate(object):
                 "Passwords do not match.")
             return False
         # the user must be preauthorized if preauthorization is True
-        if preauthorization and new_email not in self.preauthorized:
+        if preauthorization and new_email not in st.session_state[
+                self.preauthorized_session_state]:
             eh.add_user_error(
                 'register_user',
                 "User not preauthorized to register.")
@@ -185,10 +265,10 @@ class Authenticate(object):
                     creds = service_account.Credentials.from_service_account_file(
                         our_credentials, scopes=scopes)
         """
-        # we want to add our new username and email to the instance of the
-        # class, so they can't be accidentally registered again
-        self.usernames.append(username)
-        self.emails.append(email)
+        # we want to add our new username and email to the session state,
+        # so they can't be accidentally registered again
+        st.session_state[self.usernames_session_state].append(username)
+        st.session_state[self.emails_session_state].append(email)
 
         # encrypt / hash info
         if encrypt_type.lower() == 'generic':
@@ -206,19 +286,21 @@ class Authenticate(object):
         # (the key is typically the same and is what is accessed by
         # passing in 'kms_credentials' through kwargs)
         if encrypt_type.lower() == 'generic':
-            self.user_credentials = {'username': {'key': enc_username[0],
-                                                  'token': enc_username[1]},
-                                     'email': {'key': enc_email[0],
-                                               'token': enc_email[1]},
-                                     'password': password}
+            st.session_state[self.user_credentials_session_state] = {
+                'username': {'key': enc_username[0],
+                             'token': enc_username[1]},
+                'email': {'key': enc_email[0],
+                          'token': enc_email[1]},
+                'password': password}
         elif encrypt_type.lower() == 'google':
-            self.user_credentials = {'username': enc_username.ciphertext,
-                                     'email': enc_email.ciphertext,
-                                     'password': password}
+            st.session_state[self.user_credentials_session_state] = {
+                'username': enc_username.ciphertext,
+                'email': enc_email.ciphertext,
+                'password': password}
 
         # if we had the name preauthorized, remove it from that list
         if preauthorization:
-            self.preauthorized.remove(email)
+            st.session_state[self.preauthorized_session_state].remove(email)
 
     def _check_and_register_user(
             self, email_text_key: str, username_text_key: str,
@@ -330,24 +412,19 @@ class Authenticate(object):
                     creds = service_account.Credentials.from_service_account_file(
                         our_credentials, scopes=scopes)
         """
+        # we want to start with no errors and just capture any errors
+        # associated with this run of register_user
         eh.clear_errors()
-        if location not in ['main', 'sidebar']:
-            eh.add_dev_error(
-                'register_user',
-                "location argument must be one of 'main' or 'sidebar'")
+        # check on whether all session state inputs exist and are the
+        # correct type and whether the inputs are within the correct set
+        # of options
+        if not self._check_register_user_session_states(preauthorization) or \
+                not self._check_register_user_inputs(location, encrypt_type):
             return False
-        if preauthorization:
-            if not self.preauthorized:
-                eh.add_dev_error(
-                    'register_user',
-                    "preauthorization argument must not be None when "
-                    "preauthorization is True")
-                return False
-        if encrypt_type.lower() not in ['generic', 'google']:
-            eh.add_dev_error(
-                'register_user',
-                "encrypt_type argument must be one of 'generic' or 'google'")
-            return False
+
+        # we need all the usernames to be lowercase
+        st.session_state[self.usernames_session_state] = [
+            i.lower() for i in st.session_state[self.usernames_session_state]]
 
         if location == 'main':
             register_user_form = st.form('Register user')
