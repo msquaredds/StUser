@@ -24,8 +24,8 @@ class Authenticate(object):
     """
     def __init__(self, usernames_session_state: str,
                  emails_session_state: str,
+                 user_credentials_session_state: str,
                  preauthorized_session_state: str = None,
-                 user_credentials_session_state: str = None,
                  weak_passwords: list = [],
                  cookie_name: str=None, cookie_key: str=None,
                  cookie_expiry_days: float=30.0,) -> None:
@@ -44,13 +44,6 @@ class Authenticate(object):
             since we want to be able to update the list of emails
             with the methods of this class and want the updated list to
             persist.
-        :param preauthorized_session_state: The session state name to
-            access the LIST of emails of unregistered users authorized to
-            register (st.session_state[preauthorized_session_state]).
-            These should be saved into the session state before
-            instantiating this class. We use session state since we want
-            to be able to update the list of emails with the methods of
-            this class and want the updated list to persist.
         :param user_credentials_session_state: The session state name to
             access the DICTIONARY of user credentials as
             {'username': username, 'email': email, 'password': password},
@@ -61,6 +54,13 @@ class Authenticate(object):
             class. We use session state since we want to be able to update
             the dictionary of user credentials with the methods of this
             class and want the updated dictionary to persist.
+        :param preauthorized_session_state: The session state name to
+            access the LIST of emails of unregistered users authorized to
+            register (st.session_state[preauthorized_session_state]).
+            These should be saved into the session state before
+            instantiating this class. We use session state since we want
+            to be able to update the list of emails with the methods of
+            this class and want the updated list to persist.
         :param weak_passwords: The list of weak passwords that shouldn't
             be used. This isn't required, but is recommended.
         :param cookie_name: The name of the JWT cookie stored on the
@@ -72,8 +72,8 @@ class Authenticate(object):
         """
         self.usernames_session_state = usernames_session_state
         self.emails_session_state = emails_session_state
-        self.preauthorized_session_state = preauthorized_session_state
         self.user_credentials_session_state = user_credentials_session_state
+        self.preauthorized_session_state = preauthorized_session_state
         self.weak_passwords = weak_passwords
         self.cookie_name = cookie_name
         self.cookie_key = cookie_key
