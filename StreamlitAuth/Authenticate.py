@@ -216,6 +216,9 @@ class Authenticate(object):
                                      'email': enc_email.ciphertext,
                                      'password': password}
 
+        st.write(self.user_credentials)
+        st.stop()
+
         # if we had the name preauthorized, remove it from that list
         if preauthorization:
             self.preauthorized.remove(email)
