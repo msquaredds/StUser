@@ -166,7 +166,7 @@ class Authenticate(object):
                 "Please enter an email, username and password.")
             return False
         # the email must not already be used
-        if new_email in self.emails:
+        if new_email in st.session_state[self.emails_session_state]:
             eh.add_user_error(
                 'register_user',
                 "Email already taken, please use forgot username if this is "
