@@ -339,6 +339,7 @@ class Authenticate(object):
             self._register_credentials(
                 new_username, new_password, new_email, preauthorization,
                 encrypt_type, **kwargs)
+            eh.clear_errors()
 
     def register_user(self, location: str = 'main',
                       preauthorization: bool = True,
@@ -414,7 +415,7 @@ class Authenticate(object):
         """
         # we want to start with no errors and just capture any errors
         # associated with this run of register_user
-        eh.clear_errors()
+        #eh.clear_errors()
         # check on whether all session state inputs exist and are the
         # correct type and whether the inputs are within the correct set
         # of options
