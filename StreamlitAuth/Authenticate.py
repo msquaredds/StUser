@@ -1,9 +1,11 @@
 import bcrypt
 import extra_streamlit_components as stx
 import jwt
+import smtplib
 import streamlit as st
 
 from datetime import datetime, timedelta
+from email.message import EmailMessage
 from typing import Union
 
 from .Hasher import Hasher
@@ -302,10 +304,39 @@ class Authenticate(object):
         if preauthorization:
             st.session_state[self.preauthorized_session_state].remove(email)
 
+    def _email_registered_user(self, user_email: str, username: str,
+                               website_name: str, website_email: str) -> None:
+        """
+        Email the registered user to let them know they've registered.
+
+        :param email: The email of the registered user.
+        :param username: The username of the registered user.
+        :param website_name: The name of the website where the
+            registration is happening.
+        :param website_email: The email that is sending the registration
+            confirmation.
+        """
+        msg = EmailMessage()
+        msg['Subject'] = f'{website_name}: Thank You for Registering'
+        msg['From'] = website_email
+        msg['To'] = user_email
+        msg.set_content(f"""Thank you for registering for {website_name}!\n
+                        You have successfully registered with the username:
+                        {username}.\n
+                        If you did not register or you have any questions,
+                        please contact us at {website_email}.""")
+
+        # Send the message via our own SMTP server.
+        s = smtplib.SMTP('localhost')
+        s.send_message(msg)
+        s.quit()
+
     def _check_and_register_user(
             self, email_text_key: str, username_text_key: str,
             password_text_key: str, repeat_password_text_key: str,
-            preauthorization: bool, encrypt_type: str, **kwargs) -> None:
+            preauthorization: bool, encrypt_type: str,
+            email_user: bool = True, website_name: str = None,
+            website_email: str = None, **kwargs) -> None:
         """
         Once a new user submits their info, this is a callback to check
         the validity of their input and register them if valid.
@@ -325,6 +356,13 @@ class Authenticate(object):
             credentials.
             'generic': Fernet symmetric encryption.
             'google': Google Cloud KMS (Key Management Service) API.
+        :param email_user: Whether to email the user after registering.
+        :param website_name: The name of the website where the
+            registration is happening. This will be included in the email
+            and so is only necessary if email_user is True.
+        :param website_email: The email that is sending the registration
+            confirmation. This will be included in the email
+            and so is only necessary if email_user is True.
         :param **kwargs: Additional arguments for the encryption.
             Currently only needed if using 'google' encryption. See
             the docstring for register_user for more information.
@@ -339,7 +377,11 @@ class Authenticate(object):
             self._register_credentials(
                 new_username, new_password, new_email, preauthorization,
                 encrypt_type, **kwargs)
+            # get rid of any errors, since we have successfully registered
             eh.clear_errors()
+            if email_user:
+                self._email_registered_user(new_email, new_username,
+                                            website_name, website_email)
 
     def register_user(self, location: str = 'main',
                       preauthorization: bool = True,
@@ -349,6 +391,9 @@ class Authenticate(object):
                       password_text_key: str = 'register_user_password',
                       repeat_password_text_key: str =
                       'register_user_repeat_password',
+                      email_user: bool = True,
+                      website_name: str = None,
+                      website_email: str = None,
                       **kwargs) -> None:
         """
         Creates a new user registration widget.
@@ -384,6 +429,13 @@ class Authenticate(object):
             text input on the registration form. We attempt to default to
             a unique key, but you can put your own in here if you want to
             customize it or have clashes with other keys/forms.
+        :param email_user: Whether to email the user after registering.
+        :param website_name: The name of the website where the
+            registration is happening. This will be included in the email
+            and so is only necessary if email_user is True.
+        :param website_email: The email that is sending the registration
+            confirmation. This will be included in the email
+            and so is only necessary if email_user is True.
         :param **kwargs: Additional arguments for the encryption.
             Currently only needed if using 'google' encryption, in which
             case the following arguments are required:
@@ -413,9 +465,6 @@ class Authenticate(object):
                     creds = service_account.Credentials.from_service_account_file(
                         our_credentials, scopes=scopes)
         """
-        # we want to start with no errors and just capture any errors
-        # associated with this run of register_user
-        #eh.clear_errors()
         # check on whether all session state inputs exist and are the
         # correct type and whether the inputs are within the correct set
         # of options
@@ -449,7 +498,8 @@ class Authenticate(object):
         register_user_form.form_submit_button(
             'Register', on_click=self._check_and_register_user,
             args=(email_text_key, username_text_key, password_text_key,
-                  repeat_password_text_key, preauthorization, encrypt_type),
+                  repeat_password_text_key, preauthorization, encrypt_type,
+                  email_user, website_name, website_email),
             kwargs=kwargs)
 
     def _token_encode(self) -> str:
