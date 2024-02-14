@@ -332,7 +332,7 @@ class Authenticate(object):
         # try with SMTP(port=587) if issues
         # try this commented out first, then add it if issues
         s.starttls()
-        #s.ehlo()
+        s.ehlo()
         s.send_message(msg)
         s.quit()
 
