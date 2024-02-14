@@ -331,7 +331,7 @@ class Authenticate(object):
         # removed 'localhost' from the SMTP method above
         # try with SMTP(port=587) if issues
         # try this commented out first, then add it if issues
-        #s.starttls()
+        s.starttls()
         #s.ehlo()
         s.send_message(msg)
         s.quit()
