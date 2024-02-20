@@ -327,10 +327,11 @@ class Authenticate(object):
                         please contact us at {website_email}.""")
 
         # Send the message via our own SMTP server.
-        s = smtplib.SMTP()
-        # removed 'localhost' from the SMTP method above
+        s = smtplib.SMTP(port=587)
+        # tried with SMTP('localhost')
+        # tried s.starttls(), s.ehlo() and s.connect(), adding one by one
+        # in that order
         # try with SMTP(port=587) if issues
-        # try this commented out first, then add it if issues
         s.connect()
         s.starttls()
         s.ehlo()
