@@ -1,11 +1,9 @@
 import bcrypt
 import extra_streamlit_components as stx
 import jwt
-import smtplib
 import streamlit as st
 
 from datetime import datetime, timedelta
-from email.message import EmailMessage
 from typing import Union
 
 from .Hasher import Hasher
@@ -14,6 +12,7 @@ from .utils import generate_random_pw
 from .exceptions import CredentialsError, ForgotError, RegisterError, ResetError, UpdateError
 
 from StreamlitAuth import ErrorHandling as eh
+from StreamlitAuth.Email import Email
 from StreamlitAuth.Encryptor import GenericEncryptor, GoogleEncryptor
 
 
@@ -304,45 +303,33 @@ class Authenticate(object):
         if preauthorization:
             st.session_state[self.preauthorized_session_state].remove(email)
 
-    def _email_registered_user(self, user_email: str, username: str,
-                               website_name: str, website_email: str) -> None:
+    def _check_email_inputs(self, website_name: str = None,
+                            website_email: str = None) -> bool:
         """
-        Email the registered user to let them know they've registered.
-
-        :param email: The email of the registered user.
-        :param username: The username of the registered user.
-        :param website_name: The name of the website where the
-            registration is happening.
-        :param website_email: The email that is sending the registration
-            confirmation.
+        Check on whether the inputs for emails exist and are the correct
+        type.
         """
-        msg = EmailMessage()
-        msg['Subject'] = f'{website_name}: Thank You for Registering'
-        msg['From'] = website_email
-        msg['To'] = user_email
-        msg.set_content(f"""Thank you for registering for {website_name}!\n
-                        You have successfully registered with the username:
-                        {username}.\n
-                        If you did not register or you have any questions,
-                        please contact us at {website_email}.""")
-
-        # Send the message via our own SMTP server.
-        s = smtplib.SMTP(port=587)
-        # tried with SMTP('localhost')
-        # tried s.starttls(), s.ehlo() and s.connect(), adding one by one
-        # in that order
-        # try with SMTP(port=587) if issues
-        s.connect()
-        s.starttls()
-        s.ehlo()
-        s.send_message(msg)
-        s.quit()
+        validator = Validator()
+        # website_name must be a string
+        if not isinstance(website_name, str):
+            eh.add_dev_error(
+                'register_user',
+                "website_name must be a string.")
+            return False
+        # the email must be of correct format
+        if not isinstance(website_email, str) or \
+                not validator.validate_email(website_email):
+            eh.add_dev_error(
+                'register_user',
+                "website_email is not a valid format.")
+            return False
+        return True
 
     def _check_and_register_user(
             self, email_text_key: str, username_text_key: str,
             password_text_key: str, repeat_password_text_key: str,
             preauthorization: bool, encrypt_type: str,
-            email_user: bool = True, website_name: str = None,
+            email_user: str = None, website_name: str = None,
             website_email: str = None, **kwargs) -> None:
         """
         Once a new user submits their info, this is a callback to check
@@ -363,7 +350,13 @@ class Authenticate(object):
             credentials.
             'generic': Fernet symmetric encryption.
             'google': Google Cloud KMS (Key Management Service) API.
-        :param email_user: Whether to email the user after registering.
+        :param email_user: If we want to email the user after registering,
+            provide the method for email here.
+            "app_engine" - the web app is hosted on Google App Engine.
+            https://cloud.google.com/appengine/docs/standard/python3/services/mail
+            "gmail" - the user wants to use their Gmail account to send
+            the email and must have the gmail API enabled.
+            https://developers.google.com/gmail/api/guides
         :param website_name: The name of the website where the
             registration is happening. This will be included in the email
             and so is only necessary if email_user is True.
@@ -386,9 +379,14 @@ class Authenticate(object):
                 encrypt_type, **kwargs)
             # get rid of any errors, since we have successfully registered
             eh.clear_errors()
-            if email_user:
-                self._email_registered_user(new_email, new_username,
-                                            website_name, website_email)
+            if email_user is not None:
+                email_handler = Email(new_email, new_username, website_name,
+                                      website_email)
+                if self._check_email_inputs(website_name, website_email):
+                    if email_user.lower() == 'app_engine':
+                        email_handler.app_engine_email_registered_user()
+                    elif email_user.lower() == 'gmail':
+                        email_handler.gmail_email_registered_user()
 
     def register_user(self, location: str = 'main',
                       preauthorization: bool = True,
@@ -398,7 +396,7 @@ class Authenticate(object):
                       password_text_key: str = 'register_user_password',
                       repeat_password_text_key: str =
                       'register_user_repeat_password',
-                      email_user: bool = True,
+                      email_user: str = None,
                       website_name: str = None,
                       website_email: str = None,
                       **kwargs) -> None:
@@ -436,7 +434,13 @@ class Authenticate(object):
             text input on the registration form. We attempt to default to
             a unique key, but you can put your own in here if you want to
             customize it or have clashes with other keys/forms.
-        :param email_user: Whether to email the user after registering.
+        :param email_user: If we want to email the user after registering,
+            provide the method for email here.
+            "app_engine" - the web app is hosted on Google App Engine.
+            https://cloud.google.com/appengine/docs/standard/python3/services/mail
+            "gmail" - the user wants to use their Gmail account to send
+            the email and must have the gmail API enabled.
+            https://developers.google.com/gmail/api/guides
         :param website_name: The name of the website where the
             registration is happening. This will be included in the email
             and so is only necessary if email_user is True.
