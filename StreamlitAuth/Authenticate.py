@@ -325,24 +325,79 @@ class Authenticate(object):
             return False
         return True
 
+    def _email_error_handler(self, error: str) -> bool:
+        """
+        Records any errors from the email sending process.
+        """
+        if error is not None:
+            eh.add_dev_error(
+                'register_user',
+                "There was an error sending the confirmation email. "
+                "Error: " + error)
+            return False
+        return True
+
+    def _send_register_user_email(
+            self, new_email: str, new_username: str, website_name: str,
+            website_email: str, email_user: str,
+            oauth2_credentials_secrets_file: dict,
+            oauth2_credentials_token_file_name: str = 'token.json') -> None:
+        """
+        Send a confirmation email to the newly registered user.
+
+        :param new_email: The new user's email.
+        :param new_username: The new user's username.
+        :param website_name: The name of the website where the
+            registration is happening.
+        :param website_email: The email that is sending the registration
+            confirmation.
+        :param email_user: The method for email here.
+            "gmail" - the user wants to use their Gmail account to send
+            the email and must have the gmail API enabled.
+            https://developers.google.com/gmail/api/guides
+        :param oauth2_credentials_secrets_file: This can either be the
+            dictionary of the client secrets or the path to the client
+            secrets file in JSON. Note that putting the secrets file in
+            the same directory as the script is not secure.
+        :param oauth2_credentials_token_file_name: The name of the file to
+            store the token.
+        """
+        email_handler = Email(new_email, new_username, website_name,
+                              website_email)
+        if self._check_email_inputs(website_name, website_email):
+            if email_user.lower() == 'gmail':
+                creds = email_handler.get_gmail_oauth2_credentials(
+                    oauth2_credentials_secrets_file,
+                    oauth2_credentials_token_file_name)
+                error = email_handler.gmail_email_registered_user(
+                    creds)
+            else:
+                error = ("The email_user method is not recognized. "
+                         "The available options are: 'gmail'.")
+            if self._email_error_handler(error):
+                eh.clear_errors()
+
     def _check_and_register_user(
             self, email_text_key: str, username_text_key: str,
             password_text_key: str, repeat_password_text_key: str,
             preauthorization: bool, encrypt_type: str,
             email_user: str = None, website_name: str = None,
-            website_email: str = None, **kwargs) -> None:
+            website_email: str = None,
+            oauth2_credentials_secrets_file: dict = None,
+            oauth2_credentials_token_file_name: str = 'token.json',
+            **kwargs) -> None:
         """
         Once a new user submits their info, this is a callback to check
         the validity of their input and register them if valid.
 
-        :param new_email: The session state name to access the new user's
-            email.
-        :param new_username: The session state name to access the new
+        :param email_text_key: The session state name to access the new
+            user's email.
+        :param username_text_key: The session state name to access the new
             user's username.
-        :param new_password: The session state name to access the new
+        :param password_text_key: The session state name to access the new
             user's password.
-        :param new_password_repeat: The session state name to access the
-            new user's repeated password.
+        :param repeat_password_text_key: The session state name to access
+            the new user's repeated password.
         :param preauthorization: The preauthorization requirement.
             True: user must be preauthorized to register.
             False: any user can register.
@@ -352,8 +407,6 @@ class Authenticate(object):
             'google': Google Cloud KMS (Key Management Service) API.
         :param email_user: If we want to email the user after registering,
             provide the method for email here.
-            "app_engine" - the web app is hosted on Google App Engine.
-            https://cloud.google.com/appengine/docs/standard/python3/services/mail
             "gmail" - the user wants to use their Gmail account to send
             the email and must have the gmail API enabled.
             https://developers.google.com/gmail/api/guides
@@ -363,9 +416,17 @@ class Authenticate(object):
         :param website_email: The email that is sending the registration
             confirmation. This will be included in the email
             and so is only necessary if email_user is True.
+        :param oauth2_credentials_secrets_file: This can either be the
+            dictionary of the client secrets or the path to the client
+            secrets file in JSON. Note that putting the secrets file in
+            the same directory as the script is not secure. Only needed
+            if email_user = 'gmail'.
+        :param oauth2_credentials_token_file_name: The name of the file to
+            store the token. Only needed if email_user = 'gmail'.
         :param **kwargs: Additional arguments for the encryption.
-            Currently only needed if using 'google' encryption. See
-            the docstring for register_user for more information.
+            Encryption: Currently only needed if using 'google'
+                encryption. See the docstring for register_user for more
+                information.
         """
         new_email = st.session_state[email_text_key]
         new_username = st.session_state[username_text_key]
@@ -377,16 +438,15 @@ class Authenticate(object):
             self._register_credentials(
                 new_username, new_password, new_email, preauthorization,
                 encrypt_type, **kwargs)
-            # get rid of any errors, since we have successfully registered
-            eh.clear_errors()
             if email_user is not None:
-                email_handler = Email(new_email, new_username, website_name,
-                                      website_email)
-                if self._check_email_inputs(website_name, website_email):
-                    if email_user.lower() == 'app_engine':
-                        email_handler.app_engine_email_registered_user()
-                    elif email_user.lower() == 'gmail':
-                        email_handler.gmail_email_registered_user()
+                self._send_register_user_email(
+                    new_email, new_username, website_name, website_email,
+                    email_user, oauth2_credentials_secrets_file,
+                    oauth2_credentials_token_file_name)
+            else:
+                # get rid of any errors, since we have successfully
+                # registered
+                eh.clear_errors()
 
     def register_user(self, location: str = 'main',
                       preauthorization: bool = True,
@@ -399,6 +459,8 @@ class Authenticate(object):
                       email_user: str = None,
                       website_name: str = None,
                       website_email: str = None,
+                      oauth2_credentials_secrets_file: dict = None,
+                      oauth2_credentials_token_file_name: str = 'token.json',
                       **kwargs) -> None:
         """
         Creates a new user registration widget.
@@ -447,6 +509,13 @@ class Authenticate(object):
         :param website_email: The email that is sending the registration
             confirmation. This will be included in the email
             and so is only necessary if email_user is True.
+        :param oauth2_credentials_secrets_file: This can either be the
+            dictionary of the client secrets or the path to the client
+            secrets file in JSON. Note that putting the secrets file in
+            the same directory as the script is not secure. Only needed
+            if email_user = 'gmail'.
+        :param oauth2_credentials_token_file_name: The name of the file to
+            store the token. Only needed if email_user = 'gmail'.
         :param **kwargs: Additional arguments for the encryption.
             Currently only needed if using 'google' encryption, in which
             case the following arguments are required:
@@ -510,7 +579,9 @@ class Authenticate(object):
             'Register', on_click=self._check_and_register_user,
             args=(email_text_key, username_text_key, password_text_key,
                   repeat_password_text_key, preauthorization, encrypt_type,
-                  email_user, website_name, website_email),
+                  email_user, website_name, website_email,
+                  oauth2_credentials_secrets_file,
+                  oauth2_credentials_token_file_name),
             kwargs=kwargs)
 
     def _token_encode(self) -> str:
