@@ -351,7 +351,7 @@ class Authenticate(object):
             registration is happening.
         :param website_email: The email that is sending the registration
             confirmation.
-        :param email_user: The method for email here.
+        :param email_user: The method for emailing the user.
             "gmail" - the user wants to use their Gmail account to send
             the email and must have the gmail API enabled.
             https://developers.google.com/gmail/api/guides
