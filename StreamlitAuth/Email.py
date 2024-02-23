@@ -35,12 +35,12 @@ class Email(object):
         self.website_email = website_email
 
     def get_gmail_oauth2_credentials(
-            self, secrets_file: str,
+            self, secrets_dict: str,
             token_file_name: str = 'token.json') -> Credentials:
         """
         Get the credentials for the Gmail API using the OAuth2 flow.
 
-        :param secrets_file: This can either be the dictionary of the
+        :param secrets_dict: This can either be the dictionary of the
             client secrets or the path to the client secrets file in JSON.
             Note that putting the secrets file in the same directory as
             the script is not secure. The function here that uses the
@@ -66,8 +66,8 @@ class Email(object):
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    secrets_file, scopes)
+                flow = InstalledAppFlow.from_client_config(
+                    secrets_dict, scopes)
                 creds = flow.run_local_server(port=0)
                 # Save the credentials for the next run
                 with open(token_file_name, "w") as token:

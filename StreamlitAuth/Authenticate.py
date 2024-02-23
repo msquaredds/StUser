@@ -340,7 +340,7 @@ class Authenticate(object):
     def _send_register_user_email(
             self, new_email: str, new_username: str, website_name: str,
             website_email: str, email_user: str,
-            oauth2_credentials_secrets_file: dict,
+            oauth2_credentials_secrets_dict: dict,
             oauth2_credentials_token_file_name: str = 'token.json') -> None:
         """
         Send a confirmation email to the newly registered user.
@@ -355,7 +355,7 @@ class Authenticate(object):
             "gmail" - the user wants to use their Gmail account to send
             the email and must have the gmail API enabled.
             https://developers.google.com/gmail/api/guides
-        :param oauth2_credentials_secrets_file: This can either be the
+        :param oauth2_credentials_secrets_dict: This can either be the
             dictionary of the client secrets or the path to the client
             secrets file in JSON. Note that putting the secrets file in
             the same directory as the script is not secure.
@@ -367,7 +367,7 @@ class Authenticate(object):
         if self._check_email_inputs(website_name, website_email):
             if email_user.lower() == 'gmail':
                 creds = email_handler.get_gmail_oauth2_credentials(
-                    oauth2_credentials_secrets_file,
+                    oauth2_credentials_secrets_dict,
                     oauth2_credentials_token_file_name)
                 error = email_handler.gmail_email_registered_user(
                     creds)
@@ -383,7 +383,7 @@ class Authenticate(object):
             preauthorization: bool, encrypt_type: str,
             email_user: str = None, website_name: str = None,
             website_email: str = None,
-            oauth2_credentials_secrets_file: dict = None,
+            oauth2_credentials_secrets_dict: dict = None,
             oauth2_credentials_token_file_name: str = 'token.json',
             **kwargs) -> None:
         """
@@ -416,7 +416,7 @@ class Authenticate(object):
         :param website_email: The email that is sending the registration
             confirmation. This will be included in the email
             and so is only necessary if email_user is True.
-        :param oauth2_credentials_secrets_file: This can either be the
+        :param oauth2_credentials_secrets_dict: This can either be the
             dictionary of the client secrets or the path to the client
             secrets file in JSON. Note that putting the secrets file in
             the same directory as the script is not secure. Only needed
@@ -441,7 +441,7 @@ class Authenticate(object):
             if email_user is not None:
                 self._send_register_user_email(
                     new_email, new_username, website_name, website_email,
-                    email_user, oauth2_credentials_secrets_file,
+                    email_user, oauth2_credentials_secrets_dict,
                     oauth2_credentials_token_file_name)
             else:
                 # get rid of any errors, since we have successfully
@@ -459,7 +459,7 @@ class Authenticate(object):
                       email_user: str = None,
                       website_name: str = None,
                       website_email: str = None,
-                      oauth2_credentials_secrets_file: dict = None,
+                      oauth2_credentials_secrets_dict: dict = None,
                       oauth2_credentials_token_file_name: str = 'token.json',
                       **kwargs) -> None:
         """
@@ -509,7 +509,7 @@ class Authenticate(object):
         :param website_email: The email that is sending the registration
             confirmation. This will be included in the email
             and so is only necessary if email_user is True.
-        :param oauth2_credentials_secrets_file: This can either be the
+        :param oauth2_credentials_secrets_dict: This can either be the
             dictionary of the client secrets or the path to the client
             secrets file in JSON. Note that putting the secrets file in
             the same directory as the script is not secure. Only needed
@@ -580,7 +580,7 @@ class Authenticate(object):
             args=(email_text_key, username_text_key, password_text_key,
                   repeat_password_text_key, preauthorization, encrypt_type,
                   email_user, website_name, website_email,
-                  oauth2_credentials_secrets_file,
+                  oauth2_credentials_secrets_dict,
                   oauth2_credentials_token_file_name),
             kwargs=kwargs)
 
