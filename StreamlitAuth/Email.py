@@ -14,11 +14,7 @@ from typing import Union
 
 class Email(object):
     """
-    Create and send emails of different types with different services.
-
-    TODO:
-        - Get smtp_email_registered_user to work or remove it.
-        - Test app_engine_email_registered_user on Google App Engine.
+    Create and send emails with different services.
     """
     def __init__(self, email: str, username: str = None,
                  website_name: str = None, website_email: str = None) -> None:
@@ -34,19 +30,27 @@ class Email(object):
         self.website_name = website_name
         self.website_email = website_email
 
+        self.message_subject = (
+            f"""{self.website_name}: Thank You for Registering""")
+
+        self.message_body = \
+            (f"""Thank you for registering for {self.website_name}!\n
+             You have successfully registered with the username: 
+             {self.username}.\n
+             If you did not register or you have any questions,
+             please contact us at {self.website_email}.""")
+
     def get_gmail_oauth2_credentials(
             self, secrets_dict: str,
             token_file_name: str = 'token.json') -> Credentials:
         """
         Get the credentials for the Gmail API using the OAuth2 flow.
 
-        :param secrets_dict: This can either be the dictionary of the
-            client secrets or the path to the client secrets file in JSON.
-            Note that putting the secrets file in the same directory as
-            the script is not secure. The function here that uses the
-            data: from_client_secrets_file, is meant to be used with a
-            file path, but the dictionary seems to work as well. If this
-            breaks, try using the alternate method: from_client_config.
+        Note that this only works for local / desktop apps.
+
+        :param secrets_dict: The dictionary of the client secrets.
+            Note that putting the secrets in the same directory as
+            the script is not secure.
             https://google-auth-oauthlib.readthedocs.io/en/latest/reference/google_auth_oauthlib.flow.html
         :param token_file_name: The name of the file to store the token.
         :return creds: The credentials for the Gmail API.
@@ -79,6 +83,8 @@ class Email(object):
         """
         Gmail method to email the registered user to let them know they've
         registered. Must be used with a Gmail account.
+
+        Note that this only works for local / desktop apps.
 
         For now, we pass the credentials into this function.
 
@@ -115,17 +121,11 @@ class Email(object):
 
             message = EmailMessage()
 
-            message.set_content(
-                f"""Thank you for registering for {self.website_name}!\n
-                You have successfully registered with the username: 
-                {self.username}.\n
-                If you did not register or you have any questions,
-                please contact us at {self.website_email}.""")
+            message.set_content(self.message_body)
 
             message["To"] = self.email
             message["From"] = self.website_email
-            message["Subject"] = (f'{self.website_name}: Thank You for '
-                                  f'Registering')
+            message["Subject"] = self.message_subject
 
             # encoded message
             encoded_message = base64.urlsafe_b64encode(
@@ -143,54 +143,3 @@ class Email(object):
 
         except HttpError as error:
             return error
-
-    def smtp_email_registered_user(self) -> None:
-        """
-        DOES NOT WORK
-
-        Generic (SMTP) way to email the registered user to let them know
-        they've registered.
-        """
-        msg = EmailMessage()
-        msg['Subject'] = f'{self.website_name}: Thank You for Registering'
-        msg['From'] = self.website_email
-        msg['To'] = self.email
-        msg.set_content(
-            f"""Thank you for registering for {self.website_name}!\n
-            You have successfully registered with the username: 
-            {self.username}.\n
-            If you did not register or you have any questions,
-            please contact us at {self.website_email}.""")
-
-        # Send the message via our own SMTP server.
-        s = smtplib.SMTP(port=587)
-        # tried with SMTP('localhost') and SMTP(port=587)
-        # tried s.starttls(), s.ehlo() and s.connect(), adding one by one
-        # in that order
-        s.connect()
-        s.starttls()
-        s.ehlo()
-        s.send_message(msg)
-        s.quit()
-
-    def app_engine_email_registered_user(self) -> None:
-        """
-        NEEDS TO BE TESTED ON APP ENGINE
-
-        Google App Engine way to email the registered user to let them
-        know they've registered. Must be used with an app hosted on
-        Google App Engine.
-
-        https://cloud.google.com/appengine/docs/standard/python3/services/mail
-        """
-        msg = mail.EmailMessage()
-        msg.subject = f'{self.website_name}: Thank You for Registering'
-        msg.sender = self.website_email
-        msg.to = self.email
-        msg.body = (
-            f"""Thank you for registering for {self.website_name}!\n
-            You have successfully registered with the username:
-            {self.username}.\n
-            If you did not register or you have any questions,
-            please contact us at {self.website_email}.""")
-        msg.send()

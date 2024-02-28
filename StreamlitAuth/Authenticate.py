@@ -351,9 +351,13 @@ class Authenticate(object):
             registration is happening.
         :param website_email: The email that is sending the registration
             confirmation.
-        :param email_user: The method for emailing the user.
+        :param email_user: If we want to email the user after registering,
+            provide the method for email here.
             "gmail" - the user wants to use their Gmail account to send
-            the email and must have the gmail API enabled.
+            the email and must have the gmail API enabled. Note that this
+            only works for local / desktop apps. If using this method, you
+            must supply the oauth2_credentials_secrets_dict variable and
+            optionally the oauth2_credentials_token_file_name variable.
             https://developers.google.com/gmail/api/guides
         :param oauth2_credentials_secrets_dict: This can either be the
             dictionary of the client secrets or the path to the client
@@ -408,7 +412,10 @@ class Authenticate(object):
         :param email_user: If we want to email the user after registering,
             provide the method for email here.
             "gmail" - the user wants to use their Gmail account to send
-            the email and must have the gmail API enabled.
+            the email and must have the gmail API enabled. Note that this
+            only works for local / desktop apps. If using this method, you
+            must supply the oauth2_credentials_secrets_dict variable and
+            optionally the oauth2_credentials_token_file_name variable.
             https://developers.google.com/gmail/api/guides
         :param website_name: The name of the website where the
             registration is happening. This will be included in the email
@@ -498,10 +505,11 @@ class Authenticate(object):
             customize it or have clashes with other keys/forms.
         :param email_user: If we want to email the user after registering,
             provide the method for email here.
-            "app_engine" - the web app is hosted on Google App Engine.
-            https://cloud.google.com/appengine/docs/standard/python3/services/mail
             "gmail" - the user wants to use their Gmail account to send
-            the email and must have the gmail API enabled.
+            the email and must have the gmail API enabled. Note that this
+            only works for local / desktop apps. If using this method, you
+            must supply the oauth2_credentials_secrets_dict variable and
+            optionally the oauth2_credentials_token_file_name variable.
             https://developers.google.com/gmail/api/guides
         :param website_name: The name of the website where the
             registration is happening. This will be included in the email
