@@ -64,7 +64,7 @@ class GoogleEncryptor(object):
     """
     def __init__(
             self, project_id: str, location_id: str, key_ring_id: str,
-            key_id: str, kms_credentials: Credentials) -> None:
+            key_id: str, kms_credentials: Credentials = None) -> None:
         self.project_id = project_id
         self.location_id = location_id
         self.key_ring_id = key_ring_id

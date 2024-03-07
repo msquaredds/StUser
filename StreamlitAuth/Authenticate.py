@@ -217,7 +217,8 @@ class Authenticate(object):
 
     def _register_credentials(self, username: str, password: str,
                               email: str, preauthorization: bool,
-                              encrypt_type: str, **kwargs) -> None:
+                              encrypt_type: str,
+                              encrypt_args: dict = None) -> None:
         """
         Adds to credentials dictionary the new user's information.
 
@@ -237,20 +238,26 @@ class Authenticate(object):
             credentials.
             'generic': Fernet symmetric encryption.
             'google': Google Cloud KMS (Key Management Service) API.
-        :param **kwargs: Additional arguments for the encryption.
+        :param encrypt_args: Additional arguments for the encryption.
+            These will be a dictionary of arguments for whatever function
+            is used to encrypt the credentials.
+
             Currently only needed if using 'google' encryption, in which
             case the following arguments are required:
+
             project_id (string): Google Cloud project ID
-            (e.g. 'my-project').
+                (e.g. 'my-project').
             location_id (string): Cloud KMS location (e.g. 'us-east1').
             key_ring_id (string): ID of the Cloud KMS key ring
-            (e.g. 'my-key-ring').
+                (e.g. 'my-key-ring').
             key_id (string): ID of the key to use (e.g. 'my-key').
             kms_credentials (google.oauth2.service_account.Credentials):
                 The credentials to use for the KMS (Key Management
-                Service).
+                Service). If running the application in App Engine or
+                another service that recognizes the credentials
+                automatically, you can ignore this.
 
-                For example, you can set up a service account in the same
+                For example, if you set up a service account in the same
                 google cloud project that has the KMS. This service
                 account must be permissioned (at a minimum) as a "Cloud
                 KMS CryptoKey Encrypter" in order to use the KMS here.
@@ -275,7 +282,7 @@ class Authenticate(object):
         if encrypt_type.lower() == 'generic':
             encryptor = GenericEncryptor()
         elif encrypt_type.lower() == 'google':
-            encryptor = GoogleEncryptor(**kwargs)
+            encryptor = GoogleEncryptor(**encrypt_args)
         enc_username = encryptor.encrypt(username)
         enc_email = encryptor.encrypt(email)
         password = Hasher([password]).generate()[0]
@@ -338,19 +345,22 @@ class Authenticate(object):
         return True
 
     def _send_register_user_email(
-            self, new_email: str, new_username: str, website_name: str,
-            website_email: str, email_user: str,
-            oauth2_credentials_secrets_dict: dict,
-            oauth2_credentials_token_file_name: str = 'token.json') -> None:
+            self, new_email: str, new_username: str,
+            email_inputs: dict, email_user: str,
+            gmail_creds: dict = None) -> None:
         """
         Send a confirmation email to the newly registered user.
 
         :param new_email: The new user's email.
         :param new_username: The new user's username.
-        :param website_name: The name of the website where the
-            registration is happening.
-        :param website_email: The email that is sending the registration
-            confirmation.
+        :param email_inputs: The inputs for the email sending process.
+            Only necessary for when email_user is not None.
+            These are generic for any email method and currently include:
+
+            website_name (str): The name of the website where the
+                registration is happening.
+            website_email (str) : The email that is sending the
+                registration confirmation.
         :param email_user: If we want to email the user after registering,
             provide the method for email here.
             "gmail" - the user wants to use their Gmail account to send
@@ -359,22 +369,16 @@ class Authenticate(object):
             must supply the oauth2_credentials_secrets_dict variable and
             optionally the oauth2_credentials_token_file_name variable.
             https://developers.google.com/gmail/api/guides
-        :param oauth2_credentials_secrets_dict: This can either be the
-            dictionary of the client secrets or the path to the client
-            secrets file in JSON. Note that putting the secrets file in
-            the same directory as the script is not secure.
-        :param oauth2_credentials_token_file_name: The name of the file to
-            store the token.
+        :param gmail_creds: The credentials for the Gmail API using the
+            OAuth2 flow. Only needed if email_user = 'gmail'. See the
+            docstring for register_user for more information.
         """
-        email_handler = Email(new_email, new_username, website_name,
-                              website_email)
-        if self._check_email_inputs(website_name, website_email):
+        email_handler = Email(new_email, new_username, **email_inputs)
+        if self._check_email_inputs(**email_inputs):
             if email_user.lower() == 'gmail':
                 creds = email_handler.get_gmail_oauth2_credentials(
-                    oauth2_credentials_secrets_dict,
-                    oauth2_credentials_token_file_name)
-                error = email_handler.gmail_email_registered_user(
-                    creds)
+                    **gmail_creds)
+                error = email_handler.gmail_email_registered_user(creds)
             else:
                 error = ("The email_user method is not recognized. "
                          "The available options are: 'gmail'.")
@@ -384,12 +388,10 @@ class Authenticate(object):
     def _check_and_register_user(
             self, email_text_key: str, username_text_key: str,
             password_text_key: str, repeat_password_text_key: str,
-            preauthorization: bool, encrypt_type: str,
-            email_user: str = None, website_name: str = None,
-            website_email: str = None,
-            oauth2_credentials_secrets_dict: dict = None,
-            oauth2_credentials_token_file_name: str = 'token.json',
-            **kwargs) -> None:
+            preauthorization: bool,
+            encrypt_type: str, encrypt_args: dict = None,
+            email_user: str = None, email_inputs: dict = None,
+            gmail_creds: dict = None) -> None:
         """
         Once a new user submits their info, this is a callback to check
         the validity of their input and register them if valid.
@@ -409,6 +411,10 @@ class Authenticate(object):
             credentials.
             'generic': Fernet symmetric encryption.
             'google': Google Cloud KMS (Key Management Service) API.
+        :param encrypt_args: Additional arguments for the encryption.
+            Encryption: Currently only needed if using 'google'
+                encryption. See the docstring for register_user for more
+                information.
         :param email_user: If we want to email the user after registering,
             provide the method for email here.
             "gmail" - the user wants to use their Gmail account to send
@@ -417,23 +423,12 @@ class Authenticate(object):
             must supply the oauth2_credentials_secrets_dict variable and
             optionally the oauth2_credentials_token_file_name variable.
             https://developers.google.com/gmail/api/guides
-        :param website_name: The name of the website where the
-            registration is happening. This will be included in the email
-            and so is only necessary if email_user is True.
-        :param website_email: The email that is sending the registration
-            confirmation. This will be included in the email
-            and so is only necessary if email_user is True.
-        :param oauth2_credentials_secrets_dict: This can either be the
-            dictionary of the client secrets or the path to the client
-            secrets file in JSON. Note that putting the secrets file in
-            the same directory as the script is not secure. Only needed
-            if email_user = 'gmail'.
-        :param oauth2_credentials_token_file_name: The name of the file to
-            store the token. Only needed if email_user = 'gmail'.
-        :param **kwargs: Additional arguments for the encryption.
-            Encryption: Currently only needed if using 'google'
-                encryption. See the docstring for register_user for more
-                information.
+        :param email_inputs: The inputs for the email sending process.
+            Only necessary for when email_user is not None. See the
+            docstring for register_user for more information.
+        :param gmail_creds: The credentials for the Gmail API using the
+            OAuth2 flow. Only needed if email_user = 'gmail'. See the
+            docstring for register_user for more information.
         """
         new_email = st.session_state[email_text_key]
         new_username = st.session_state[username_text_key]
@@ -444,31 +439,28 @@ class Authenticate(object):
                 preauthorization):
             self._register_credentials(
                 new_username, new_password, new_email, preauthorization,
-                encrypt_type, **kwargs)
+                encrypt_type, encrypt_args)
             if email_user is not None:
                 self._send_register_user_email(
-                    new_email, new_username, website_name, website_email,
-                    email_user, oauth2_credentials_secrets_dict,
-                    oauth2_credentials_token_file_name)
+                    new_email, new_username, email_inputs, email_user,
+                    gmail_creds)
             else:
                 # get rid of any errors, since we have successfully
                 # registered
                 eh.clear_errors()
 
     def register_user(self, location: str = 'main',
-                      preauthorization: bool = True,
+                      preauthorization: bool = False,
                       encrypt_type: str = 'google',
+                      encrypt_args: dict = None,
                       email_text_key: str = 'register_user_email',
                       username_text_key: str = 'register_user_username',
                       password_text_key: str = 'register_user_password',
                       repeat_password_text_key: str =
                       'register_user_repeat_password',
                       email_user: str = None,
-                      website_name: str = None,
-                      website_email: str = None,
-                      oauth2_credentials_secrets_dict: dict = None,
-                      oauth2_credentials_token_file_name: str = 'token.json',
-                      **kwargs) -> None:
+                      email_inputs: dict = None,
+                      gmail_creds: dict = None) -> None:
         """
         Creates a new user registration widget.
 
@@ -487,6 +479,40 @@ class Authenticate(object):
             credentials.
             'generic': Fernet symmetric encryption.
             'google': Google Cloud KMS (Key Management Service) API.
+        :param encrypt_args: Additional arguments for the encryption.
+            These will be a dictionary of arguments for whatever function
+            is used to encrypt the credentials.
+
+            Currently only needed if using 'google' encryption, in which
+            case the following arguments are required:
+
+            project_id (string): Google Cloud project ID
+                (e.g. 'my-project').
+            location_id (string): Cloud KMS location (e.g. 'us-east1').
+            key_ring_id (string): ID of the Cloud KMS key ring
+                (e.g. 'my-key-ring').
+            key_id (string): ID of the key to use (e.g. 'my-key').
+            kms_credentials (google.oauth2.service_account.Credentials):
+                The credentials to use for the KMS (Key Management
+                Service). If running the application in App Engine or
+                another service that recognizes the credentials
+                automatically, you can ignore this.
+
+                For example, if you set up a service account in the same
+                google cloud project that has the KMS. This service
+                account must be permissioned (at a minimum) as a "Cloud
+                KMS CryptoKey Encrypter" in order to use the KMS here.
+
+                Example code to get the credentials (you must install
+                    google-auth-oauthlib and google-auth in your
+                    environment):
+                    from google.oauth2 import service_account
+                    scopes = ['https://www.googleapis.com/auth/cloudkms']
+                    # this is just a file that stores the key info (the
+                    # service account key, not the KMS key) in a JSON file
+                    our_credentials = 'service_account_key_file.json'
+                    creds = service_account.Credentials.from_service_account_file(
+                        our_credentials, scopes=scopes)
         :param email_text_key: The key for the email text input on the
             registration form. We attempt to default to a unique key, but
             you can put your own in here if you want to customize it or
@@ -511,47 +537,24 @@ class Authenticate(object):
             must supply the oauth2_credentials_secrets_dict variable and
             optionally the oauth2_credentials_token_file_name variable.
             https://developers.google.com/gmail/api/guides
-        :param website_name: The name of the website where the
-            registration is happening. This will be included in the email
-            and so is only necessary if email_user is True.
-        :param website_email: The email that is sending the registration
-            confirmation. This will be included in the email
-            and so is only necessary if email_user is True.
-        :param oauth2_credentials_secrets_dict: This can either be the
-            dictionary of the client secrets or the path to the client
-            secrets file in JSON. Note that putting the secrets file in
-            the same directory as the script is not secure. Only needed
-            if email_user = 'gmail'.
-        :param oauth2_credentials_token_file_name: The name of the file to
-            store the token. Only needed if email_user = 'gmail'.
-        :param **kwargs: Additional arguments for the encryption.
-            Currently only needed if using 'google' encryption, in which
-            case the following arguments are required:
-            project_id (string): Google Cloud project ID
-            (e.g. 'my-project').
-            location_id (string): Cloud KMS location (e.g. 'us-east1').
-            key_ring_id (string): ID of the Cloud KMS key ring
-            (e.g. 'my-key-ring').
-            key_id (string): ID of the key to use (e.g. 'my-key').
-            kms_credentials (google.oauth2.service_account.Credentials):
-                The credentials to use for the KMS (Key Management
-                Service).
+        :param email_inputs: The inputs for the email sending process.
+            Only necessary for when email_user is not None.
+            These are generic for any email method and currently include:
 
-                For example, you can set up a service account in the same
-                google cloud project that has the KMS. This service
-                account must be permissioned (at a minimum) as a "Cloud
-                KMS CryptoKey Encrypter" in order to use the KMS here.
+            website_name (str): The name of the website where the
+                registration is happening.
+            website_email (str) : The email that is sending the
+                registration confirmation.
+        :param gmail_creds: The credentials to use for the gmail API. Only
+            necessary if email_user = 'gmail'.
 
-                Example code to get the credentials (you must install
-                    google-auth-oauthlib and google-auth in your
-                    environment):
-                    from google.oauth2 import service_account
-                    scopes = ['https://www.googleapis.com/auth/cloudkms']
-                    # this is just a file that stores the key info (the
-                    # service account key, not the KMS key) in a JSON file
-                    our_credentials = 'service_account_key_file.json'
-                    creds = service_account.Credentials.from_service_account_file(
-                        our_credentials, scopes=scopes)
+            oauth2_credentials_secrets_dict (dict): The dictionary of the
+                client secrets. Note that putting the secrets file in
+                the same directory as the script is not secure.
+            oauth2_credentials_token_file_name (str): Optional. The name
+                of the file to store the token, so it is not necessary to
+                reauthenticate every time. If left out, it will default
+                to 'token.json'.
         """
         # check on whether all session state inputs exist and are the
         # correct type and whether the inputs are within the correct set
@@ -587,10 +590,7 @@ class Authenticate(object):
             'Register', on_click=self._check_and_register_user,
             args=(email_text_key, username_text_key, password_text_key,
                   repeat_password_text_key, preauthorization, encrypt_type,
-                  email_user, website_name, website_email,
-                  oauth2_credentials_secrets_dict,
-                  oauth2_credentials_token_file_name),
-            kwargs=kwargs)
+                  encrypt_args, email_user, email_inputs, gmail_creds))
 
     def _token_encode(self) -> str:
         """
