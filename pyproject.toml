@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "StreamlitAuth"
-version = '0.0.51'
+version = '0.0.52'
 description = 'User login and authentication for Streamlit apps'
 readme = 'README.md'
 authors = [
@@ -27,6 +27,7 @@ dependencies = [
     "google-cloud-kms >= 2.20.0",
     "PyJWT >=2.3.0",
     "PyYAML >= 5.3.1",
+    "sendgrid>=6.11.0",
     "streamlit >= 1.18.0"
 ]
 keywords = ['Python', 'Streamlit', 'Authentication', 'Components']

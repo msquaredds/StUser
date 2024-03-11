@@ -347,7 +347,7 @@ class Authenticate(object):
     def _send_register_user_email(
             self, new_email: str, new_username: str,
             email_inputs: dict, email_user: str,
-            gmail_creds: dict = None) -> None:
+            email_creds: dict = None) -> None:
         """
         Send a confirmation email to the newly registered user.
 
@@ -363,25 +363,36 @@ class Authenticate(object):
                 registration confirmation.
         :param email_user: If we want to email the user after registering,
             provide the method for email here.
-            "gmail" - the user wants to use their Gmail account to send
-            the email and must have the gmail API enabled. Note that this
-            only works for local / desktop apps. If using this method, you
-            must supply the oauth2_credentials_secrets_dict variable and
-            optionally the oauth2_credentials_token_file_name variable.
-            https://developers.google.com/gmail/api/guides
-        :param gmail_creds: The credentials for the Gmail API using the
-            OAuth2 flow. Only needed if email_user = 'gmail'. See the
+            "gmail": the user wants to use their Gmail account to send
+                the email and must have the gmail API enabled. Note that
+                this only works for local / desktop apps. If using this
+                method, you must supply the
+                oauth2_credentials_secrets_dict variable and
+                optionally the oauth2_credentials_token_file_name
+                variable, as parts of the gmail_creds input.
+                https://developers.google.com/gmail/api/guides
+            "sendgrid": the user wants to use the SendGrid API to send
+                the email. Note that you must have signed up for a
+                SendGrid account and have an API key. If using this
+                method, you must supply the API key as the sendgrid_creds
+                input here.
+        :param email_creds: The credentials to use for the email API. Only
+            necessary if email_user is not None. See the
             docstring for register_user for more information.
         """
         email_handler = Email(new_email, new_username, **email_inputs)
         if self._check_email_inputs(**email_inputs):
             if email_user.lower() == 'gmail':
                 creds = email_handler.get_gmail_oauth2_credentials(
-                    **gmail_creds)
+                    **email_creds)
                 error = email_handler.gmail_email_registered_user(creds)
+            elif email_user.lower() == 'sendgrid':
+                error = email_handler.sendgrid_email_registered_user(
+                    **email_creds)
             else:
                 error = ("The email_user method is not recognized. "
-                         "The available options are: 'gmail'.")
+                         "The available options are: 'gmail' or "
+                         "'sendgrid'.")
             if self._email_error_handler(error):
                 eh.clear_errors()
 
@@ -391,7 +402,7 @@ class Authenticate(object):
             preauthorization: bool,
             encrypt_type: str, encrypt_args: dict = None,
             email_user: str = None, email_inputs: dict = None,
-            gmail_creds: dict = None) -> None:
+            email_creds: dict = None) -> None:
         """
         Once a new user submits their info, this is a callback to check
         the validity of their input and register them if valid.
@@ -417,17 +428,24 @@ class Authenticate(object):
                 information.
         :param email_user: If we want to email the user after registering,
             provide the method for email here.
-            "gmail" - the user wants to use their Gmail account to send
-            the email and must have the gmail API enabled. Note that this
-            only works for local / desktop apps. If using this method, you
-            must supply the oauth2_credentials_secrets_dict variable and
-            optionally the oauth2_credentials_token_file_name variable.
-            https://developers.google.com/gmail/api/guides
+            "gmail": the user wants to use their Gmail account to send
+                the email and must have the gmail API enabled. Note that
+                this only works for local / desktop apps. If using this
+                method, you must supply the
+                oauth2_credentials_secrets_dict variable and
+                optionally the oauth2_credentials_token_file_name
+                variable, as parts of the gmail_creds input.
+                https://developers.google.com/gmail/api/guides
+            "sendgrid": the user wants to use the SendGrid API to send
+                the email. Note that you must have signed up for a
+                SendGrid account and have an API key. If using this
+                method, you must supply the API key as the sendgrid_creds
+                input here.
         :param email_inputs: The inputs for the email sending process.
             Only necessary for when email_user is not None. See the
             docstring for register_user for more information.
-        :param gmail_creds: The credentials for the Gmail API using the
-            OAuth2 flow. Only needed if email_user = 'gmail'. See the
+        :param email_creds: The credentials to use for the email API. Only
+            necessary if email_user is not None. See the
             docstring for register_user for more information.
         """
         new_email = st.session_state[email_text_key]
@@ -443,7 +461,7 @@ class Authenticate(object):
             if email_user is not None:
                 self._send_register_user_email(
                     new_email, new_username, email_inputs, email_user,
-                    gmail_creds)
+                    email_creds)
             else:
                 # get rid of any errors, since we have successfully
                 # registered
@@ -460,7 +478,7 @@ class Authenticate(object):
                       'register_user_repeat_password',
                       email_user: str = None,
                       email_inputs: dict = None,
-                      gmail_creds: dict = None) -> None:
+                      email_creds: dict = None) -> None:
         """
         Creates a new user registration widget.
 
@@ -531,12 +549,19 @@ class Authenticate(object):
             customize it or have clashes with other keys/forms.
         :param email_user: If we want to email the user after registering,
             provide the method for email here.
-            "gmail" - the user wants to use their Gmail account to send
-            the email and must have the gmail API enabled. Note that this
-            only works for local / desktop apps. If using this method, you
-            must supply the oauth2_credentials_secrets_dict variable and
-            optionally the oauth2_credentials_token_file_name variable.
-            https://developers.google.com/gmail/api/guides
+            "gmail": the user wants to use their Gmail account to send
+                the email and must have the gmail API enabled. Note that
+                this only works for local / desktop apps. If using this
+                method, you must supply the
+                oauth2_credentials_secrets_dict variable and
+                optionally the oauth2_credentials_token_file_name
+                variable, as parts of the gmail_creds input.
+                https://developers.google.com/gmail/api/guides
+            "sendgrid": the user wants to use the SendGrid API to send
+                the email. Note that you must have signed up for a
+                SendGrid account and have an API key. If using this
+                method, you must supply the API key as the sendgrid_creds
+                input here.
         :param email_inputs: The inputs for the email sending process.
             Only necessary for when email_user is not None.
             These are generic for any email method and currently include:
@@ -545,16 +570,40 @@ class Authenticate(object):
                 registration is happening.
             website_email (str) : The email that is sending the
                 registration confirmation.
-        :param gmail_creds: The credentials to use for the gmail API. Only
-            necessary if email_user = 'gmail'.
+        :param email_creds: The credentials to use for the email API. Only
+            necessary if email_user is not None.
 
-            oauth2_credentials_secrets_dict (dict): The dictionary of the
-                client secrets. Note that putting the secrets file in
-                the same directory as the script is not secure.
-            oauth2_credentials_token_file_name (str): Optional. The name
-                of the file to store the token, so it is not necessary to
-                reauthenticate every time. If left out, it will default
-                to 'token.json'.
+            If email_user = 'gmail':
+                oauth2_credentials_secrets_dict (dict): The dictionary of
+                    the client secrets. Note that putting the secrets file
+                    in the same directory as the script is not secure.
+                oauth2_credentials_token_file_name (str): Optional. The
+                    name of the file to store the token, so it is not
+                    necessary to reauthenticate every time. If left out,
+                    it will default to 'token.json'.
+            If email_user = 'sendgrid':
+                sendgrid_api_key (str): The API key for the SendGrid API.
+                    Note that it should be stored separately in a secure
+                    location, such as a Google Cloud Datastore or
+                    encrypted in your project's pyproject.toml file.
+
+                    Example code to get the credentials in Google Cloud
+                        DataStore (you must install google-cloud-datastore
+                        in your environment):
+                        from google.cloud import datastore
+                        # you can also specify the project and/or database
+                        # in Client() below
+                        # you might also need credentials to connect to
+                        # the client if not run on Google App Engine (or
+                        # another service that recognizes the credentials
+                        # automatically)
+                        client = datastore.Client()
+                        # replace "apikeys" with the kind you set up in
+                        # datastore
+                        docs = list(client.query(kind="apikeys").fetch())
+                        # replace "sendgridapikey" with the name of the
+                        # key you set up in datastore
+                        api_key = docs[0]["sendgridapikey"]
         """
         # check on whether all session state inputs exist and are the
         # correct type and whether the inputs are within the correct set
@@ -590,7 +639,7 @@ class Authenticate(object):
             'Register', on_click=self._check_and_register_user,
             args=(email_text_key, username_text_key, password_text_key,
                   repeat_password_text_key, preauthorization, encrypt_type,
-                  encrypt_args, email_user, email_inputs, gmail_creds))
+                  encrypt_args, email_user, email_inputs, email_creds))
 
     def _token_encode(self) -> str:
         """

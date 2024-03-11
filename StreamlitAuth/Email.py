@@ -9,6 +9,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 from typing import Union
 
 
@@ -142,4 +144,32 @@ class Email(object):
             return None
 
         except HttpError as error:
+            return error
+
+    def sendgrid_email_registered_user(
+            self, sendgrid_api_key: str) -> Union[None, str]:
+        """
+        SendGrid method to email the registered user to let them know
+        they've registered. Must be used with a SendGrid account.
+
+        For now, we pass the API key into this function. It can be stored
+        separately in a secure location, such as a Google Cloud Datastore
+        or encrypted in your project's pyproject.toml file.
+
+        :param sendgrid_api_key: The API key for the SendGrid account.
+        """
+        message = Mail(
+            from_email=self.website_email,
+            to_emails=self.email,
+            subject=self.message_subject,
+            html_content=self.message_body)
+
+        try:
+            sg = SendGridAPIClient(sendgrid_api_key)
+            response = sg.send(message)
+            if response.status_code[0] in [4, 5]:
+                # these are status codes that indicate an error (either a
+                # negative transient or permanent error)
+                return f"{response.status_code}: {response.body}"
+        except Exception as error:
             return error
