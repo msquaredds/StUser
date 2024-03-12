@@ -164,12 +164,15 @@ class Email(object):
             subject=self.message_subject,
             html_content=self.message_body)
 
-        try:
-            sg = SendGridAPIClient(sendgrid_api_key)
-            response = sg.send(message)
-            if response.status_code[0] in [4, 5]:
-                # these are status codes that indicate an error (either a
-                # negative transient or permanent error)
-                return f"{response.status_code}: {response.body}"
-        except Exception as error:
-            return error
+        # try:
+        sg = SendGridAPIClient(sendgrid_api_key)
+        response = sg.send(message)
+        st.write(response.status_code)
+        st.write(type(response.status_code))
+        st.write(response.status_code[0])
+        if response.status_code[0] in [4, 5]:
+            # these are status codes that indicate an error (either a
+            # negative transient or permanent error)
+            return f"{response.status_code}: {response.body}"
+        # except Exception as error:
+        #     return error
