@@ -167,45 +167,34 @@ class Email(object):
         # try:
         sg = SendGridAPIClient(sendgrid_api_key)
         response = sg.send(message)
+
         import streamlit as st
         st.write(response.status_code)
         st.write(response.body)
 
         try:
-            response_status_code = response.status_code
-            st.write(status_code)
+            response_status_code = str(response.status_code)
+            st.write(response_status_code)
         except Exception as error:
             st.write("status_code error")
             st.write(error)
 
         try:
-            st.write(type(response_status_code))
-        except Exception as error:
-            st.write("status type error")
-            st.write(error)
-
-        try:
-            st.write(response.ok)
-        except Exception as error:
-            st.write("ok error")
-            st.write(error)
-
-        try:
-            response_body = response.body
+            response_body = str(response.body)
             st.write(response_body)
         except Exception as error:
             st.write("body error")
             st.write(error)
 
         try:
-            st.write(type(response_body))
+            st.write(response_status_code[0])
         except Exception as error:
-            st.write("body type error")
+            st.write("response_status_code error")
             st.write(error)
 
         try:
-            if not response.ok:
-                return f"{response.status_code}: {response.body}"
+            if response_status_code[0] in ["4", "5"]:
+                return f"{response_status_code}: {response_body}"
         except Exception as error:
             st.write(str(error))
             return error
