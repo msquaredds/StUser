@@ -167,12 +167,15 @@ class Email(object):
         # try:
         sg = SendGridAPIClient(sendgrid_api_key)
         response = sg.send(message)
+        import streamlit as st
         st.write(response.status_code)
         st.write(type(response.status_code))
         st.write(response.status_code[0])
-        if response.status_code[0] in [4, 5]:
-            # these are status codes that indicate an error (either a
-            # negative transient or permanent error)
-            return f"{response.status_code}: {response.body}"
-        # except Exception as error:
-        #     return error
+        try:
+            if response.status_code[0] in [4, 5]:
+                # these are status codes that indicate an error (either a
+                # negative transient or permanent error)
+                return f"{response.status_code}: {response.body}"
+        except Exception as error:
+            st.write(str(error))
+            return error
