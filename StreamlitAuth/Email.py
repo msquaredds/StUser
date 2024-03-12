@@ -169,12 +169,42 @@ class Email(object):
         response = sg.send(message)
         import streamlit as st
         st.write(response.status_code)
-        st.write(type(response.status_code))
-        st.write(response.status_code[0])
+        st.write(response.body)
+
         try:
-            if response.status_code[0] in [4, 5]:
-                # these are status codes that indicate an error (either a
-                # negative transient or permanent error)
+            response_status_code = response.status_code
+            st.write(status_code)
+        except Exception as error:
+            st.write("status_code error")
+            st.write(error)
+
+        try:
+            st.write(type(response_status_code))
+        except Exception as error:
+            st.write("status type error")
+            st.write(error)
+
+        try:
+            st.write(response.ok)
+        except Exception as error:
+            st.write("ok error")
+            st.write(error)
+
+        try:
+            response_body = response.body
+            st.write(response_body)
+        except Exception as error:
+            st.write("body error")
+            st.write(error)
+
+        try:
+            st.write(type(response_body))
+        except Exception as error:
+            st.write("body type error")
+            st.write(error)
+
+        try:
+            if not response.ok:
                 return f"{response.status_code}: {response.body}"
         except Exception as error:
             st.write(str(error))
