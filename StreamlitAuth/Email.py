@@ -164,37 +164,17 @@ class Email(object):
             subject=self.message_subject,
             html_content=self.message_body)
 
-        # try:
-        sg = SendGridAPIClient(sendgrid_api_key)
-        response = sg.send(message)
-
-        import streamlit as st
-        st.write(response.status_code)
-        st.write(response.body)
-
         try:
+            sg = SendGridAPIClient(sendgrid_api_key)
+            response = sg.send(message)
+
             response_status_code = str(response.status_code)
-            st.write(response_status_code)
-        except Exception as error:
-            st.write("status_code error")
-            st.write(error)
-
-        try:
             response_body = str(response.body)
-            st.write(response_body)
-        except Exception as error:
-            st.write("body error")
-            st.write(error)
 
-        try:
-            st.write(response_status_code[0])
-        except Exception as error:
-            st.write("response_status_code error")
-            st.write(error)
-
-        try:
             if response_status_code[0] in ["4", "5"]:
+                # statuses 400 and 500 are errors
+                # see: https://en.wikipedia.org/wiki/List_of_SMTP_server_return_codes
                 return f"{response_status_code}: {response_body}"
+
         except Exception as error:
-            st.write(str(error))
-            return error
+            return str(error)
