@@ -310,6 +310,15 @@ class Authenticate(object):
         if preauthorization:
             st.session_state[self.preauthorized_session_state].remove(email)
 
+    def _add_user_credentials_to_save_function(
+            self, cred_save_args: dict) -> dict:
+        if cred_save_args is None:
+            cred_save_args = {}
+        # add the user_credentials to cred_save_args
+        cred_save_args['user_credentials'] = st.session_state[
+            self.user_credentials_session_state].copy()
+        return cred_save_args
+
     def _cred_save_error_handler(self, error: str) -> bool:
         """
         Records any errors from the credential saving process.
@@ -481,6 +490,8 @@ class Authenticate(object):
             # we can either try to save credentials and email, save
             # credentials and not email, just email, or none of the above
             if cred_save_function is not None:
+                cred_save_args = self._add_user_credentials_to_save_function(
+                    cred_save_args)
                 error = cred_save_function(**cred_save_args)
                 if self._cred_save_error_handler(error):
                     if email_user is not None:
@@ -642,12 +653,20 @@ class Authenticate(object):
             a database or other storage location. This can be useful so
             that you can confirm the credentials are saved during the
             callback and handle that as necessary. The function should
-            take the credentials as an argument and save them to the
-            desired location. The function can also return an error
-            message as a string, which will be handled by the error
-            handler.
-        :param cred_save_args: Additional arguments for the save_creds
-            function.
+            take the user credentials as an argument and save them to the
+            desired location. However, those user credentials should not
+            be defined in the cred_save_args (see below), since they will
+            be created and automatically added here. The function can also
+            return an error message as a string, which will be handled by
+            the error handler.
+        :param cred_save_args: Arguments for the cred_save_function. Only
+            necessary if cred_save_function is not None. Note that these
+            arguments should NOT include the user credentials themselves,
+            as these will be passed to the function automatically. That
+            way they can be compiled in this function and passed to the
+            function in the callback. The variable for the
+            cred_save_function for the user credentials should be called
+            'user_credentials'.
         """
         # check on whether all session state inputs exist and are the
         # correct type and whether the inputs are within the correct set
