@@ -4,7 +4,7 @@ import jwt
 import streamlit as st
 
 from datetime import datetime, timedelta
-from typing import Union
+from typing import Callable, Union
 
 from .Hasher import Hasher
 from .Validator import Validator
@@ -310,6 +310,18 @@ class Authenticate(object):
         if preauthorization:
             st.session_state[self.preauthorized_session_state].remove(email)
 
+    def _cred_save_error_handler(self, error: str) -> bool:
+        """
+        Records any errors from the credential saving process.
+        """
+        if error is not None:
+            eh.add_dev_error(
+                'register_user',
+                "There was an error saving the user credentials. "
+                "Error: " + error)
+            return False
+        return True
+
     def _check_email_inputs(self, website_name: str = None,
                             website_email: str = None) -> bool:
         """
@@ -402,7 +414,9 @@ class Authenticate(object):
             preauthorization: bool,
             encrypt_type: str, encrypt_args: dict = None,
             email_user: str = None, email_inputs: dict = None,
-            email_creds: dict = None) -> None:
+            email_creds: dict = None,
+            cred_save_function: Callable = None,
+            cred_save_args: dict = None) -> None:
         """
         Once a new user submits their info, this is a callback to check
         the validity of their input and register them if valid.
@@ -447,6 +461,12 @@ class Authenticate(object):
         :param email_creds: The credentials to use for the email API. Only
             necessary if email_user is not None. See the
             docstring for register_user for more information.
+        :param cred_save_function: The function to save the credentials.
+            See the docstring for register_user for more information.
+        :param cred_save_args: The arguments to pass to the
+            cred_save_function. Only necessary if cred_save_function is
+            not none. See the docstring for register_user for more
+            information.
         """
         new_email = st.session_state[email_text_key]
         new_username = st.session_state[username_text_key]
@@ -458,7 +478,18 @@ class Authenticate(object):
             self._register_credentials(
                 new_username, new_password, new_email, preauthorization,
                 encrypt_type, encrypt_args)
-            if email_user is not None:
+            # we can either try to save credentials and email, save
+            # credentials and not email, just email, or none of the above
+            if cred_save_function is not None:
+                error = cred_save_function(**cred_save_args)
+                if self._cred_save_error_handler(error):
+                    if email_user is not None:
+                        self._send_register_user_email(
+                            new_email, new_username, email_inputs, email_user,
+                            email_creds)
+                    else:
+                        eh.clear_errors()
+            elif email_user is not None:
                 self._send_register_user_email(
                     new_email, new_username, email_inputs, email_user,
                     email_creds)
@@ -478,7 +509,9 @@ class Authenticate(object):
                       'register_user_repeat_password',
                       email_user: str = None,
                       email_inputs: dict = None,
-                      email_creds: dict = None) -> None:
+                      email_creds: dict = None,
+                      cred_save_function: Callable = None,
+                      cred_save_args: dict = None) -> None:
         """
         Creates a new user registration widget.
 
@@ -604,6 +637,17 @@ class Authenticate(object):
                         # replace "sendgridapikey" with the name of the
                         # key you set up in datastore
                         api_key = docs[0]["sendgridapikey"]
+        :param cred_save_function: A function to save the credentials.
+            This is only necessary if you want to save the credentials to
+            a database or other storage location. This can be useful so
+            that you can confirm the credentials are saved during the
+            callback and handle that as necessary. The function should
+            take the credentials as an argument and save them to the
+            desired location. The function can also return an error
+            message as a string, which will be handled by the error
+            handler.
+        :param cred_save_args: Additional arguments for the save_creds
+            function.
         """
         # check on whether all session state inputs exist and are the
         # correct type and whether the inputs are within the correct set
@@ -639,7 +683,8 @@ class Authenticate(object):
             'Register', on_click=self._check_and_register_user,
             args=(email_text_key, username_text_key, password_text_key,
                   repeat_password_text_key, preauthorization, encrypt_type,
-                  encrypt_args, email_user, email_inputs, email_creds))
+                  encrypt_args, email_user, email_inputs, email_creds,
+                  cred_save_function, cred_save_args))
 
     def _token_encode(self) -> str:
         """
