@@ -1,6 +1,7 @@
 from StreamlitAuth import ErrorHandling
 from StreamlitAuth import utils
 from StreamlitAuth.Authenticate import Authenticate
+from StreamlitAuth.DBTools import DBTools
 from StreamlitAuth.Email import Email
 from StreamlitAuth.Encryptor import GenericEncryptor, GoogleEncryptor
 from StreamlitAuth.exceptions import (CredentialsError, ResetError,

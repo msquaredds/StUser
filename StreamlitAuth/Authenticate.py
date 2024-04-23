@@ -12,6 +12,7 @@ from .utils import generate_random_pw
 from .exceptions import CredentialsError, ForgotError, RegisterError, ResetError, UpdateError
 
 from StreamlitAuth import ErrorHandling as eh
+from StreamlitAuth.DBTools import DBTools
 from StreamlitAuth.Email import Email
 from StreamlitAuth.Encryptor import GenericEncryptor, GoogleEncryptor
 
@@ -319,6 +320,24 @@ class Authenticate(object):
             self.user_credentials_session_state].copy()
         return cred_save_args
 
+    def _save_user_credentials(self, cred_save_function: Union[Callable, str],
+                               cred_save_args: dict) -> Union[None, str]:
+        """Save user credentials."""
+        # first, add the user credentials to the cred_save_args
+        cred_save_args = self._add_user_credentials_to_save_function(
+            cred_save_args)
+        if isinstance(cred_save_function, str):
+            if cred_save_function.lower() == 'bigquery':
+                db = DBTools()
+                error = db.store_user_credentials_bigquery(**cred_save_args)
+            else:
+                error = ("The cred_save_function method is not recognized. "
+                         "The available options are: 'bigquery' or a "
+                         "callable function.")
+        else:
+            error = cred_save_function(**cred_save_args)
+        return error
+
     def _cred_save_error_handler(self, error: str) -> bool:
         """
         Records any errors from the credential saving process.
@@ -367,7 +386,7 @@ class Authenticate(object):
 
     def _send_register_user_email(
             self, new_email: str, new_username: str,
-            email_inputs: dict, email_user: str,
+            email_inputs: dict, email_user: Union[callable, str],
             email_creds: dict = None) -> None:
         """
         Send a confirmation email to the newly registered user.
@@ -383,7 +402,9 @@ class Authenticate(object):
             website_email (str) : The email that is sending the
                 registration confirmation.
         :param email_user: If we want to email the user after registering,
-            provide the method for email here.
+            provide the function (callable) or method (str) for email
+            here. See the docstring for register_user for more
+            information.
             "gmail": the user wants to use their Gmail account to send
                 the email and must have the gmail API enabled. Note that
                 this only works for local / desktop apps. If using this
@@ -403,28 +424,36 @@ class Authenticate(object):
         """
         email_handler = Email(new_email, new_username, **email_inputs)
         if self._check_email_inputs(**email_inputs):
-            if email_user.lower() == 'gmail':
-                creds = email_handler.get_gmail_oauth2_credentials(
-                    **email_creds)
-                error = email_handler.gmail_email_registered_user(creds)
-            elif email_user.lower() == 'sendgrid':
-                error = email_handler.sendgrid_email_registered_user(
-                    **email_creds)
+            if isinstance(email_user, str):
+                if email_user.lower() == 'gmail':
+                    creds = email_handler.get_gmail_oauth2_credentials(
+                        **email_creds)
+                    error = email_handler.gmail_email_registered_user(creds)
+                elif email_user.lower() == 'sendgrid':
+                    error = email_handler.sendgrid_email_registered_user(
+                        **email_creds)
+                else:
+                    error = ("The email_user method is not recognized. "
+                             "The available options are: 'gmail' or "
+                             "'sendgrid'.")
             else:
-                error = ("The email_user method is not recognized. "
-                         "The available options are: 'gmail' or "
-                         "'sendgrid'.")
+                error = email_user(**email_creds)
             if self._email_error_handler(error):
                 eh.clear_errors()
 
     def _check_and_register_user(
-            self, email_text_key: str, username_text_key: str,
-            password_text_key: str, repeat_password_text_key: str,
+            self,
+            email_text_key: str,
+            username_text_key: str,
+            password_text_key: str,
+            repeat_password_text_key: str,
             preauthorization: bool,
-            encrypt_type: str, encrypt_args: dict = None,
-            email_user: str = None, email_inputs: dict = None,
+            encrypt_type: str,
+            encrypt_args: dict = None,
+            email_user: Union[callable, str] = None,
+            email_inputs: dict = None,
             email_creds: dict = None,
-            cred_save_function: Callable = None,
+            cred_save_function: Union[Callable, str] = None,
             cred_save_args: dict = None) -> None:
         """
         Once a new user submits their info, this is a callback to check
@@ -450,7 +479,9 @@ class Authenticate(object):
                 encryption. See the docstring for register_user for more
                 information.
         :param email_user: If we want to email the user after registering,
-            provide the method for email here.
+            provide the function (callable) or method (str) for email
+            here.  See the docstring for register_user for more
+            information.
             "gmail": the user wants to use their Gmail account to send
                 the email and must have the gmail API enabled. Note that
                 this only works for local / desktop apps. If using this
@@ -490,9 +521,8 @@ class Authenticate(object):
             # we can either try to save credentials and email, save
             # credentials and not email, just email, or none of the above
             if cred_save_function is not None:
-                cred_save_args = self._add_user_credentials_to_save_function(
-                    cred_save_args)
-                error = cred_save_function(**cred_save_args)
+                error = self._save_user_credentials(
+                    cred_save_function, cred_save_args)
                 if self._cred_save_error_handler(error):
                     if email_user is not None:
                         self._send_register_user_email(
@@ -518,10 +548,10 @@ class Authenticate(object):
                       password_text_key: str = 'register_user_password',
                       repeat_password_text_key: str =
                       'register_user_repeat_password',
-                      email_user: str = None,
+                      email_user: Union[Callable, str] = None,
                       email_inputs: dict = None,
                       email_creds: dict = None,
-                      cred_save_function: Callable = None,
+                      cred_save_function: Union[Callable, str] = None,
                       cred_save_args: dict = None) -> None:
         """
         Creates a new user registration widget.
@@ -592,7 +622,13 @@ class Authenticate(object):
             a unique key, but you can put your own in here if you want to
             customize it or have clashes with other keys/forms.
         :param email_user: If we want to email the user after registering,
-            provide the method for email here.
+            provide the method for email here, this can be a callable
+            function or a string. The function can also return an error
+            message as a string, which will be handled by the error
+            handler.
+
+            The current pre-defined function types are:
+
             "gmail": the user wants to use their Gmail account to send
                 the email and must have the gmail API enabled. Note that
                 this only works for local / desktop apps. If using this
@@ -648,7 +684,15 @@ class Authenticate(object):
                         # replace "sendgridapikey" with the name of the
                         # key you set up in datastore
                         api_key = docs[0]["sendgridapikey"]
-        :param cred_save_function: A function to save the credentials.
+            Otherwise, these must be defined by the user in the callable
+            function and will likely include credentials to the email
+            service.
+        :param cred_save_function: A function (callable) or pre-defined
+            function type (str) to save the credentials.
+
+            The current pre-defined function types are:
+                'bigquery': Saves the credentials to a BigQuery table.
+
             This is only necessary if you want to save the credentials to
             a database or other storage location. This can be useful so
             that you can confirm the credentials are saved during the
@@ -656,17 +700,20 @@ class Authenticate(object):
             take the user credentials as an argument and save them to the
             desired location. However, those user credentials should not
             be defined in the cred_save_args (see below), since they will
-            be created and automatically added here. The function can also
-            return an error message as a string, which will be handled by
-            the error handler.
+            be created and automatically added here. Instead, it should
+            take things like database name, table name, credentials to log
+            into the database, etc. The function can also return an error
+            message as a string, which will be handled by the error
+            handler.
         :param cred_save_args: Arguments for the cred_save_function. Only
             necessary if cred_save_function is not None. Note that these
             arguments should NOT include the user credentials themselves,
-            as these will be passed to the function automatically. That
-            way they can be compiled in this function and passed to the
-            function in the callback. The variable for the
-            cred_save_function for the user credentials should be called
-            'user_credentials'.
+            as these will be passed to the function automatically.
+            Instead, it should include things like database name, table
+            name, credentials to log into the database, etc. That way they
+            can be compiled in this function and passed to the function in
+            the callback. The variable for the cred_save_function for the
+            user credentials should be called 'user_credentials'.
         """
         # check on whether all session state inputs exist and are the
         # correct type and whether the inputs are within the correct set
