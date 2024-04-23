@@ -714,6 +714,22 @@ class Authenticate(object):
             can be compiled in this function and passed to the function in
             the callback. The variable for the cred_save_function for the
             user credentials should be called 'user_credentials'.
+
+            If using 'bigquery' as your cred_save_function, the following
+            arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located. This should already exist in
+                GCP and have the BigQuery API enabled.
+            dataset (str): The name of the dataset in the BigQuery table.
+                This should already have been created in BigQuery.
+            table_name (str): The name of the table in the BigQuery
+                dataset. This does not need to have been created yet in
+                the project/dataset. If not, a new table will be created;
+                if so, it will be appended to.
         """
         # check on whether all session state inputs exist and are the
         # correct type and whether the inputs are within the correct set
