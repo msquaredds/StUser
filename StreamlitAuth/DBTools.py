@@ -42,7 +42,8 @@ class DBTools(object):
         """
         # turn the user credentials into a dataframe
         for key in user_credentials:
-            if len(user_credentials[key]) != 1:
+            # create an error if the value is a list or dict
+            if isinstance(user_credentials[key], (list, dict)):
                 return ("Each key in user_credentials should have only one "
                         "value.")
             else:
