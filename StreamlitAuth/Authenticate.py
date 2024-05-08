@@ -940,7 +940,7 @@ class Authenticate(object):
                 elif location == 'sidebar':
                     login_form = st.sidebar.form('Login')
 
-                login_form.subheader(form_name)
+                login_form.subheader('Login')
                 self.username = login_form.text_input('Username').lower()
                 st.session_state['username'] = self.username
                 self.password = login_form.text_input('Password', type='password')
