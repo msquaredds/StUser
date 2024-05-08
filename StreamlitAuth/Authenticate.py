@@ -808,6 +808,7 @@ class Authenticate(object):
                 'login',
                 "location argument must be one of 'main' or 'sidebar'")
             return False
+        return True
 
     def _token_encode(self) -> str:
         """
