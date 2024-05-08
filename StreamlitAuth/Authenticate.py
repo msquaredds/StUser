@@ -930,7 +930,12 @@ class Authenticate(object):
         """
         # check whether the inputs are within the correct set of options
         if not self._check_login_inputs(location):
+            st.write("HERE")
             return False
+
+        if ('stauth' in st.session_state and 'authentication_status' in
+                st.session_state.stauth):
+            st.write('authentication_status', st.session_state.stauth['authentication_status'])
 
         if not st.session_state.stauth['authentication_status']:
             self._check_cookie()
