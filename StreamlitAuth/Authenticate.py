@@ -24,13 +24,15 @@ class Authenticate(object):
 
     :method register_user: Creates a new user registration widget.
     """
-    def __init__(self, usernames_session_state: str,
+    def __init__(self,
+                 usernames_session_state: str,
                  emails_session_state: str,
                  user_credentials_session_state: str,
                  preauthorized_session_state: str = None,
                  weak_passwords: list = [],
-                 cookie_name: str=None, cookie_key: str=None,
-                 cookie_expiry_days: float=30.0,) -> None:
+                 cookie_name: str=None,
+                 cookie_key: str=None,
+                 cookie_expiry_days: float=30.0) -> None:
         """
         :param usernames_session_state: The session state name to access
             the LIST of existing usernames (st.session_state[
@@ -86,11 +88,11 @@ class Authenticate(object):
         if 'stauth' not in st.session_state:
             st.session_state['stauth'] = {}
         if 'authentication_status' not in st.session_state.stauth:
-            st.session_state.stauth['authentication_status'] = None
+            st.session_state.stauth['authentication_status'] = False
         if 'username' not in st.session_state.stauth:
             st.session_state.stauth['username'] = None
         if 'logout' not in st.session_state.stauth:
-            st.session_state.stauth['logout'] = None
+            st.session_state.stauth['logout'] = False
 
     def _check_register_user_session_states(
             self, preauthorization: bool) -> bool:
@@ -539,7 +541,8 @@ class Authenticate(object):
                 # registered
                 eh.clear_errors()
 
-    def register_user(self, location: str = 'main',
+    def register_user(self,
+                      location: str = 'main',
                       preauthorization: bool = False,
                       encrypt_type: str = 'google',
                       encrypt_args: dict = None,
@@ -547,7 +550,7 @@ class Authenticate(object):
                       username_text_key: str = 'register_user_username',
                       password_text_key: str = 'register_user_password',
                       repeat_password_text_key: str =
-                      'register_user_repeat_password',
+                          'register_user_repeat_password',
                       email_user: Union[Callable, str] = None,
                       email_inputs: dict = None,
                       email_creds: dict = None,
@@ -556,7 +559,7 @@ class Authenticate(object):
         """
         Creates a new user registration widget.
 
-        Note that for the generic version we get and store a key and
+        Note that for the generic encrypt_type we get and store a key and
         token for each username and email, while for the google version
         we just get and store a ciphertext for each username and email
         (the key is typically the same for all encrypted texts and is what
@@ -575,8 +578,8 @@ class Authenticate(object):
             These will be a dictionary of arguments for whatever function
             is used to encrypt the credentials.
 
-            Currently only needed if using 'google' encryption, in which
-            case the following arguments are required:
+            If using 'google' encryption, the following arguments are
+            required:
 
             project_id (string): Google Cloud project ID
                 (e.g. 'my-project').
@@ -768,6 +771,44 @@ class Authenticate(object):
                   encrypt_args, email_user, email_inputs, email_creds,
                   cred_save_function, cred_save_args))
 
+    def _check_cookie(self):
+        """
+        Checks the validity of the reauthentication cookie.
+        """
+        self.token = self.cookie_manager.get(self.cookie_name)
+        st.write("token: ", self.token)
+        if self.token is not None:
+            self.token = self._token_decode()
+            st.write("token: ", self.token)
+            if self.token is not False:
+                if not st.session_state['logout']:
+                    if self.token['exp_date'] > datetime.utcnow().timestamp():
+                        if 'name' and 'username' in self.token:
+                            st.session_state['name'] = self.token['name']
+                            st.session_state['username'] = self.token['username']
+                            st.session_state['authentication_status'] = True
+
+    def check_authentication_status(self):
+        if ('stauth' in st.session_state and 'authentication_status' in
+                st.session_state.stauth and st.session_state.stauth[
+                'authentication_status']):
+            return True
+        elif self._check_cookie():
+            return True
+        else:
+            return False
+
+    def _check_login_inputs(self, location: str) -> bool:
+        """
+        Check whether the login inputs are within the correct set of
+        options.
+        """
+        if location not in ['main', 'sidebar']:
+            eh.add_dev_error(
+                'login',
+                "location argument must be one of 'main' or 'sidebar'")
+            return False
+
     def _token_encode(self) -> str:
         """
         Encodes the contents of the reauthentication cookie.
@@ -818,20 +859,6 @@ class Authenticate(object):
         return bcrypt.checkpw(self.password.encode(), 
             self.credentials['usernames'][self.username]['password'].encode())
 
-    def _check_cookie(self):
-        """
-        Checks the validity of the reauthentication cookie.
-        """
-        self.token = self.cookie_manager.get(self.cookie_name)
-        if self.token is not None:
-            self.token = self._token_decode()
-            if self.token is not False:
-                if not st.session_state['logout']:
-                    if self.token['exp_date'] > datetime.utcnow().timestamp():
-                        if 'name' and 'username' in self.token:
-                            st.session_state['name'] = self.token['name']
-                            st.session_state['username'] = self.token['username']
-                            st.session_state['authentication_status'] = True
     
     def _check_credentials(self, inplace: bool=True) -> bool:
         """
@@ -872,31 +899,42 @@ class Authenticate(object):
             else:
                 return False
 
-    def login(self, form_name: str, location: str='main') -> tuple:
+    def login(self,
+              location: str = 'main',
+              email_or_username_text_key: str = 'login_user_username_email',
+              password_text_key: str = 'login_password') -> None:
         """
         Creates a login widget.
 
-        Parameters
-        ----------
-        form_name: str
-            The rendered name of the login form.
-        location: str
-            The location of the login form i.e. main or sidebar.
-        Returns
-        -------
-        str
-            Name of the authenticated user.
-        bool
-            The status of authentication, None: no credentials entered, 
-            False: incorrect credentials, True: correct credentials.
-        str
-            Username of the authenticated user.
+        Note that this method does not check for whether a user is already
+        logged in, that should happen separately from this method, with
+        this method one of the resulting options. For example:
+        if ('stauth' in st.session_state and 'authentication_status' in
+                st.session_state.stauth and st.session_state.stauth[
+                'authentication_status']):
+            main()
+        else:
+            stauth.login()
+            # you might also want a register_user widget here
+
+        :param location: The location of the login form i.e. main or
+            sidebar.
+        :param email_or_username_text_key: The key for the username or
+            email text input on the login form. We attempt to default to a
+            unique key, but you can put your own in here if you want to
+            customize it or have clashes with other keys/forms.
+        :param password_text_key: The key for the username or
+            email text input on the login form. We attempt to default to a
+            unique key, but you can put your own in here if you want to
+            customize it or have clashes with other keys/forms.
         """
-        if location not in ['main', 'sidebar']:
-            raise ValueError("Location must be one of 'main' or 'sidebar'")
-        if not st.session_state['authentication_status']:
+        # check whether the inputs are within the correct set of options
+        if not self._check_login_inputs(location):
+            return False
+
+        if not st.session_state.stauth['authentication_status']:
             self._check_cookie()
-            if not st.session_state['authentication_status']:
+            if not st.session_state.stauth['authentication_status']:
                 if location == 'main':
                     login_form = st.form('Login')
                 elif location == 'sidebar':
