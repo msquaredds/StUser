@@ -147,7 +147,7 @@ class Authenticate(object):
             return False
         return True
 
-    def _check_user_info(
+    def _check_register_user_info(
             self, new_email: str, new_username: str, new_password: str,
             new_password_repeat: str, preauthorization: bool) -> bool:
         """
@@ -514,7 +514,7 @@ class Authenticate(object):
         new_username = st.session_state[username_text_key]
         new_password = st.session_state[password_text_key]
         new_password_repeat = st.session_state[repeat_password_text_key]
-        if self._check_user_info(
+        if self._check_register_user_info(
                 new_email, new_username, new_password, new_password_repeat,
                 preauthorization):
             self._register_credentials(
@@ -771,37 +771,145 @@ class Authenticate(object):
                   encrypt_args, email_user, email_inputs, email_creds,
                   cred_save_function, cred_save_args))
 
-    def _token_decode(self, token: dict) -> Union[str, bool]:
-        """Decodes the contents of the reauthentication cookie."""
-        try:
-            return jwt.decode(token, self.cookie_key, algorithms=['HS256'])
-        except Exception as e:
-            return False
+    def _token_decode(self, token: dict, encrypt_type: str,
+                      encrypt_args: dict = None) -> dict:
+        """
+        Decodes the contents of the reauthentication cookie.
 
-    def _check_cookie(self) -> bool:
-        """Checks the validity of the reauthentication cookie."""
+        :param token: The token to decode.
+        :param encrypt_type: The type of encryption to use for the user
+            credentials.
+            'generic': Fernet symmetric encryption.
+            'google': Google Cloud KMS (Key Management Service) API.
+        :param encrypt_args: Additional arguments for the encryption.
+            These will be a dictionary of arguments for whatever function
+            is used to encrypt the credentials.
+
+            If using 'google' encryption, the following arguments are
+            required:
+
+            project_id (string): Google Cloud project ID
+                (e.g. 'my-project').
+            location_id (string): Cloud KMS location (e.g. 'us-east1').
+            key_ring_id (string): ID of the Cloud KMS key ring
+                (e.g. 'my-key-ring').
+            key_id (string): ID of the key to use (e.g. 'my-key').
+            kms_credentials (google.oauth2.service_account.Credentials):
+                The credentials to use for the KMS (Key Management
+                Service). If running the application in App Engine or
+                another service that recognizes the credentials
+                automatically, you can ignore this.
+
+                For example, if you set up a service account in the same
+                google cloud project that has the KMS. This service
+                account must be permissioned (at a minimum) as a "Cloud
+                KMS CryptoKey Encrypter" in order to use the KMS here.
+
+                Example code to get the credentials (you must install
+                    google-auth-oauthlib and google-auth in your
+                    environment):
+                    from google.oauth2 import service_account
+                    scopes = ['https://www.googleapis.com/auth/cloudkms']
+                    # this is just a file that stores the key info (the
+                    # service account key, not the KMS key) in a JSON file
+                    our_credentials = 'service_account_key_file.json'
+                    creds = service_account.Credentials.from_service_account_file(
+                        our_credentials, scopes=scopes)
+        """
+        if encrypt_type.lower() == 'generic':
+            encryptor = GenericEncryptor()
+        elif encrypt_type.lower() == 'google':
+            encryptor = GoogleEncryptor(**encrypt_args)
+        decrypted_token = encryptor.decrypt(token)
+        return decrypted_token
+
+        # OLD
+        # try:
+        #     return jwt.decode(token, self.cookie_key, algorithms=['HS256'])
+        # except Exception as e:
+        #     return False
+
+    def _check_cookie(self, encrypt_type: str,
+                      encrypt_args: dict = None) -> bool:
+        """
+        Checks the validity of the reauthentication cookie.
+
+        :param encrypt_type: The type of encryption to use for the user
+            credentials.
+            'generic': Fernet symmetric encryption.
+            'google': Google Cloud KMS (Key Management Service) API.
+        :param encrypt_args: Additional arguments for the encryption.
+            Encryption: Currently only needed if using 'google'
+                encryption. See the docstring for
+                check_authentication_status for more information.
+        """
         token = self.cookie_manager.get(self.cookie_name)
         if token is not None:
-            token = self._token_decode(token)
+            token = self._token_decode(token, encrypt_type, encrypt_args)
             # we only want to accept this if we are not logged out and
             # the token expiry is later than now
-            if (token is not False and
-                    not st.session_state.stauth['logout'] and
-                    'exp_date' in token and
-                    token['exp_date'] > datetime.utcnow().timestamp() and
-                    'username' in token):
+            if (token is not False
+                    and not st.session_state.stauth['logout']
+                    and 'exp_date' in token
+                    and token['exp_date'] > datetime.now(
+                        datetime.UTC).timestamp()
+                    and 'username' in token):
                 st.session_state.stauth['username'] = token['username']
                 st.session_state.stauth['authentication_status'] = True
                 return True
         return False
 
-    def check_authentication_status(self) -> bool:
-        """Check if the user is authenticated."""
+    def check_authentication_status(
+            self,
+            encrypt_type: str,
+            encrypt_args: dict = None) -> bool:
+        """
+        Check if the user is authenticated.
+
+        :param encrypt_type: The type of encryption to use for the user
+            credentials.
+            'generic': Fernet symmetric encryption.
+            'google': Google Cloud KMS (Key Management Service) API.
+        :param encrypt_args: Additional arguments for the encryption.
+            These will be a dictionary of arguments for whatever function
+            is used to encrypt the credentials.
+
+            If using 'google' encryption, the following arguments are
+            required:
+
+            project_id (string): Google Cloud project ID
+                (e.g. 'my-project').
+            location_id (string): Cloud KMS location (e.g. 'us-east1').
+            key_ring_id (string): ID of the Cloud KMS key ring
+                (e.g. 'my-key-ring').
+            key_id (string): ID of the key to use (e.g. 'my-key').
+            kms_credentials (google.oauth2.service_account.Credentials):
+                The credentials to use for the KMS (Key Management
+                Service). If running the application in App Engine or
+                another service that recognizes the credentials
+                automatically, you can ignore this.
+
+                For example, if you set up a service account in the same
+                google cloud project that has the KMS. This service
+                account must be permissioned (at a minimum) as a "Cloud
+                KMS CryptoKey Encrypter" in order to use the KMS here.
+
+                Example code to get the credentials (you must install
+                    google-auth-oauthlib and google-auth in your
+                    environment):
+                    from google.oauth2 import service_account
+                    scopes = ['https://www.googleapis.com/auth/cloudkms']
+                    # this is just a file that stores the key info (the
+                    # service account key, not the KMS key) in a JSON file
+                    our_credentials = 'service_account_key_file.json'
+                    creds = service_account.Credentials.from_service_account_file(
+                        our_credentials, scopes=scopes)
+        """
         if ('stauth' in st.session_state and 'authentication_status' in
                 st.session_state.stauth and st.session_state.stauth[
                 'authentication_status']):
             return True
-        return self._check_cookie()
+        return self._check_cookie(encrypt_type, encrypt_args)
 
     def _check_login_session_states(self) -> bool:
         """
@@ -816,20 +924,15 @@ class Authenticate(object):
                 "usernames_session_state must be a list or set "
                 "assigned to st.session_state[usernames_session_state]")
             return False
-        if self.emails_session_state not in st.session_state or \
-                not isinstance(st.session_state[self.emails_session_state],
-                               (list, set)):
-            eh.add_dev_error(
-                'login',
-                "emails_session_state must be a list or set assigned to "
-                "st.session_state[emails_session_state]")
-            return False
         return True
 
     def _check_login_inputs(self, location: str) -> bool:
         """
         Check whether the login inputs are within the correct set of
         options.
+
+        :param location: The location of the login form i.e. main or
+            sidebar.
         """
         if location not in ['main', 'sidebar']:
             eh.add_dev_error(
@@ -838,75 +941,248 @@ class Authenticate(object):
             return False
         return True
 
-    def _token_encode(self) -> str:
-        """
-        Encodes the contents of the reauthentication cookie.
+    def _add_username_to_password_pull_args(
+            self, username: str, password_pull_args: dict) -> dict:
+        """Add the username to password_pull_args."""
+        if password_pull_args is None:
+            password_pull_args = {}
+        password_pull_args['username'] = username
+        return password_pull_args
 
-        Returns
-        -------
-        str
-            The JWT cookie for passwordless reauthentication.
+    def _password_pull_error_handler(self, indicator: str,
+                                     value: str) -> bool:
+        """ Records any errors from the password pulling process."""
+        if indicator == 'dev_errors':
+            eh.add_dev_error(
+                'login',
+                "There was an error checking the user's password. "
+                "Error: " + value)
+            return False
+        elif indicator == 'user_errors':
+            # we don't have a message here because this is handled by the
+            # calling function - it should combine the lack of password
+            # with the potential for an incorrect username and display
+            # something like "Incorrect username or password."
+            return False
+        return True
+
+    def _check_pw(
+            self,
+            password: str,
+            username: str,
+            password_pull_function: Union[str, Callable],
+            password_pull_args: dict=None) -> Tuple[bool, Union[str, None],
+                                                    Union[str, None]]:
         """
-        return jwt.encode({'name':st.session_state['name'],
-            'username':st.session_state['username'],
-            'exp_date':self.exp_date}, self.cookie_key, algorithm='HS256')
+        Pulls the expected password and checks the validity of the entered
+        password.
+
+        :param password: The entered password.
+        :param username: The entered username.
+        :param password_pull_function: The function to pull the password
+            associated with the username. This can be a callable function
+            or a string.
+
+            At a minimum, a callable function should take 'username' as
+            an argument, but can include other arguments as well.
+            A callable function should return:
+             - A tuple of an indicator and a value
+             - The indicator should be either 'dev_errors', 'user_errors'
+                or 'success'.
+             - The value should be a string that contains the error
+                message when the indicator is 'dev_errors', None when the
+                indicator is 'user_errors', and the hashed password when
+                the indicator is 'success'. It is None with 'user_errors'
+                since we will handle that in the calling function and
+                create a user_errors that tells the user that
+                the username or password is incorrect.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls the password from a BigQuery table.
+        :param password_pull_args: Arguments for the
+            password_pull_function. This should not include 'username'
+            since that will be added here.
+
+            If using 'bigquery' as your password_pull_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            username_col (str): The name of the column in the BigQuery
+                table that contains the usernames.
+        """
+        # add the username to the arguments for the password pull function
+        password_pull_args = self._add_username_to_password_pull_args(
+            username, password_pull_args)
+        # pull the password
+        if isinstance(password_pull_function, str):
+            if password_pull_function.lower() == 'bigquery':
+                db = DBTools()
+                indicator, value = db.pull_password_bigquery(**cred_save_args)
+            else:
+                indicator, value = (
+                    'dev_errors',
+                    "The password_pull_function method is not recognized. "
+                    "The available options are: 'bigquery' or a callable "
+                    "function.")
+        else:
+            indicator, value = password_pull_function(**password_pull_args)
+
+        # only continue if we didn't have any issues getting the password
+        if self._password_pull_error_handler(indicator, value):
+            verified = Hasher([password]).check([value])[0]
+            if verified:
+                # in this case we just want to know that we successfully
+                # matched the password
+                return True, None, None
+            else:
+                # here we need to let the calling function know that we
+                # didn't match the password and that this was a
+                # 'user_errors', which should be handled accordingly
+                return False, 'user_errors', None
+        # if we had an issue getting the password, we need to let the
+        # calling function know that we had either a 'dev_errors' issue or
+        # a 'user_errors' issue, which should be handled accordingly
+        return False, indicator, value
 
     def _set_exp_date(self) -> str:
         """
         Creates the reauthentication cookie's expiry date.
 
-        Returns
-        -------
-        str
-            The JWT cookie's expiry timestamp in Unix epoch.
+        :return: The JWT cookie's expiry timestamp in Unix epoch.
         """
-        return (datetime.utcnow() + timedelta(days=self.cookie_expiry_days)).timestamp()
+        return (datetime.now(datetime.UTC) + timedelta(
+            days=self.cookie_expiry_days)).timestamp()
 
-    def _check_pw(self) -> bool:
+    def _token_encode(self, exp_date: str, encrypt_type: str,
+                      encrypt_args: dict=None) -> str:
         """
-        Checks the validity of the entered password.
+        Encodes the contents of the reauthentication cookie.
 
-        Returns
-        -------
-        bool
-            The validity of the entered password by comparing it to the hashed password on disk.
+        :param exp_date: The expiry date for the token.
+        :param encrypt_type: The type of encryption to use for the user
+            credentials.
+            'generic': Fernet symmetric encryption.
+            'google': Google Cloud KMS (Key Management Service) API.
+        :param encrypt_args: Additional arguments for the encryption.
+            These will be a dictionary of arguments for whatever function
+            is used to encrypt the credentials.
+
+            If using 'google' encryption, the following arguments are
+            required:
+
+            project_id (string): Google Cloud project ID
+                (e.g. 'my-project').
+            location_id (string): Cloud KMS location (e.g. 'us-east1').
+            key_ring_id (string): ID of the Cloud KMS key ring
+                (e.g. 'my-key-ring').
+            key_id (string): ID of the key to use (e.g. 'my-key').
+            kms_credentials (google.oauth2.service_account.Credentials):
+                The credentials to use for the KMS (Key Management
+                Service). If running the application in App Engine or
+                another service that recognizes the credentials
+                automatically, you can ignore this.
+
+                For example, if you set up a service account in the same
+                google cloud project that has the KMS. This service
+                account must be permissioned (at a minimum) as a "Cloud
+                KMS CryptoKey Encrypter" in order to use the KMS here.
+
+                Example code to get the credentials (you must install
+                    google-auth-oauthlib and google-auth in your
+                    environment):
+                    from google.oauth2 import service_account
+                    scopes = ['https://www.googleapis.com/auth/cloudkms']
+                    # this is just a file that stores the key info (the
+                    # service account key, not the KMS key) in a JSON file
+                    our_credentials = 'service_account_key_file.json'
+                    creds = service_account.Credentials.from_service_account_file(
+                        our_credentials, scopes=scopes)
         """
-        return bcrypt.checkpw(self.password.encode(), 
-            self.credentials['usernames'][self.username]['password'].encode())
+        token = {'username': st.session_state.stauth['username'],
+                 'exp_date': exp_date}
+        if encrypt_type.lower() == 'generic':
+            encryptor = GenericEncryptor()
+        elif encrypt_type.lower() == 'google':
+            encryptor = GoogleEncryptor(**encrypt_args)
+        encrypted_token = encryptor.encrypt(token)
+        return encrypted_token
 
-    
-    def _check_credentials(self, username_email: str, password: str) -> bool:
-        """Checks the validity of the entered credentials."""
-        if (username_email in st.session_state[self.usernames_session_state] or
-                username_email in st.session_state[self.emails_session_state]):
-            if self._check_pw():
-                if inplace:
-                    st.session_state.stauth['username'] = username_email
-                    self.exp_date = self._set_exp_date()
-                    self.token = self._token_encode()
-                    self.cookie_manager.set(self.cookie_name, self.token,
-                        expires_at=datetime.now() + timedelta(days=self.cookie_expiry_days))
-                    st.session_state['authentication_status'] = True
-                else:
-                    return True
-            else:
-                st.session_state['authentication_status'] = False
+        # OLD
+        # return jwt.encode({'name':st.session_state['name'],
+        #     'username':st.session_state['username'],
+        #     'exp_date':self.exp_date}, self.cookie_key, algorithm='HS256')
+
+    def _check_credentials(
+            self,
+            username: str,
+            password: str,
+            password_pull_function: Union[str, Callable],
+            password_pull_args: dict = None,
+            encrypt_type: str = 'google',
+            encrypt_args: dict = None) -> None:
+        """
+        Checks the validity of the entered credentials.
+
+        :param username: The entered username.
+        :param password: The entered password.
+        :param password_pull_function: The function to pull the password
+            associated with the username. This can be a callable function
+            or a string. See the docstring for login for more information.
+        :param password_pull_args: Arguments for the
+            password_pull_function. See the docstring for login for more
+            information.
+        :param encrypt_type: The type of encryption to use for the user
+            credentials.
+            'generic': Fernet symmetric encryption.
+            'google': Google Cloud KMS (Key Management Service) API.
+        :param encrypt_args: Additional arguments for the encryption.
+            Encryption: Currently only needed if using 'google'
+                encryption. See the docstring for login for more
+                information.
+        """
+        # we only continue if the username exists in our list and the
+        # password matches the username
+        if username in st.session_state[self.usernames_session_state] and \
+                self._check_pw(password, username, password_pull_function,
+                               password_pull_args)[0]:
+            st.session_state.stauth['username'] = username
+            st.session_state['authentication_status'] = True
+            exp_date = self._set_exp_date()
+            token = self._token_encode(exp_date, encrypt_type, encrypt_args)
+            self.cookie_manager.set(self.cookie_name, token,
+                expires_at=datetime.now() + timedelta(days=self.cookie_expiry_days))
         else:
+            # if either the username was incorrect or the password doesn't
+            # match and there isn't a dev_error, we want to let the user
+            # know that the username or password was incorrect
+            if self._check_pw(password, username, password_pull_function,
+                              password_pull_args)[1] == 'user_errors':
+                eh.add_user_error('login',
+                                  "Incorrect username or password.")
             st.session_state['authentication_status'] = False
 
     def login(self,
               location: str = 'main',
-              email_or_username_text_key: str = 'login_user_username_email',
-              password_text_key: str = 'login_password') -> None:
+              username_text_key: str = 'login_username',
+              password_text_key: str = 'login_password',
+              password_pull_function: Union[str, Callable] = 'bigquery',
+              password_pull_args: dict = None,
+              encrypt_type: str = 'google',
+              encrypt_args: dict = None) -> None:
         """
         Creates a login widget.
 
         Note that this method does not check for whether a user is already
         logged in, that should happen separately from this method, with
         this method one of the resulting options. For example:
-        if ('stauth' in st.session_state and 'authentication_status' in
-                st.session_state.stauth and st.session_state.stauth[
-                'authentication_status']):
+        if check_authentication_status(encrypt_type, encrypt_args):
             main()
         else:
             stauth.login()
@@ -914,14 +1190,88 @@ class Authenticate(object):
 
         :param location: The location of the login form i.e. main or
             sidebar.
-        :param email_or_username_text_key: The key for the username or
-            email text input on the login form. We attempt to default to a
-            unique key, but you can put your own in here if you want to
-            customize it or have clashes with other keys/forms.
+        :param username_text_key: The key for the username text input on
+            the login form. We attempt to default to a unique key, but you
+            can put your own in here if you want to customize it or have
+            clashes with other keys/forms.
         :param password_text_key: The key for the username or
             email text input on the login form. We attempt to default to a
             unique key, but you can put your own in here if you want to
             customize it or have clashes with other keys/forms.
+        :param password_pull_function: The function to pull the password
+            associated with the username. This can be a callable function
+            or a string.
+
+            At a minimum, a callable function should take 'username' as
+            an argument, but can include other arguments as well.
+            A callable function should return:
+             - A tuple of an indicator and a value
+             - The indicator should be either 'dev_errors', 'user_errors'
+                or 'success'.
+             - The value should be a string that contains the error
+                message when the indicator is 'dev_errors', None when the
+                indicator is 'user_errors', and the hashed password when
+                the indicator is 'success'. It is None with 'user_errors'
+                since we will handle that in the calling function and
+                create a user_errors that tells the user that the
+                username or password was incorrect.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls the password from a BigQuery table.
+        :param password_pull_args: Arguments for the
+            password_pull_function.
+
+            If using 'bigquery' as your password_pull_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            username_col (str): The name of the column in the BigQuery
+                table that contains the usernames.
+        :param encrypt_type: The type of encryption to use for the user
+            credentials.
+            'generic': Fernet symmetric encryption.
+            'google': Google Cloud KMS (Key Management Service) API.
+        :param encrypt_args: Additional arguments for the encryption.
+            These will be a dictionary of arguments for whatever function
+            is used to encrypt the credentials.
+
+            If using 'google' encryption, the following arguments are
+            required:
+
+            project_id (string): Google Cloud project ID
+                (e.g. 'my-project').
+            location_id (string): Cloud KMS location (e.g. 'us-east1').
+            key_ring_id (string): ID of the Cloud KMS key ring
+                (e.g. 'my-key-ring').
+            key_id (string): ID of the key to use (e.g. 'my-key').
+            kms_credentials (google.oauth2.service_account.Credentials):
+                The credentials to use for the KMS (Key Management
+                Service). If running the application in App Engine or
+                another service that recognizes the credentials
+                automatically, you can ignore this.
+
+                For example, if you set up a service account in the same
+                google cloud project that has the KMS. This service
+                account must be permissioned (at a minimum) as a "Cloud
+                KMS CryptoKey Encrypter" in order to use the KMS here.
+
+                Example code to get the credentials (you must install
+                    google-auth-oauthlib and google-auth in your
+                    environment):
+                    from google.oauth2 import service_account
+                    scopes = ['https://www.googleapis.com/auth/cloudkms']
+                    # this is just a file that stores the key info (the
+                    # service account key, not the KMS key) in a JSON file
+                    our_credentials = 'service_account_key_file.json'
+                    creds = service_account.Credentials.from_service_account_file(
+                        our_credentials, scopes=scopes)
         """
         # check whether the inputs are within the correct set of options
         if not self._check_login_session_states() or \
@@ -937,14 +1287,15 @@ class Authenticate(object):
         # we need keys for all of these so they can be accessed in the
         # callback through session_state (such as
         # st.session_state['login_user_username_email'])
-        username_email = login_form.text_input(
-            'Username or Email', key=email_or_username_text_key).lower()
+        username = login_form.text_input(
+            'Username', key=username_text_key).lower()
         password = login_form.text_input(
             'Password', type='password', key=password_text_key)
 
         login_form.form_submit_button(
             'Login', on_click=self._check_credentials,
-            args=(username_email, password))
+            args=(username, password, password_pull_function,
+                  password_pull_args, encrypt_type, encrypt_args))
 
     def logout(self, button_name: str, location: str='main', key: str=None):
         """

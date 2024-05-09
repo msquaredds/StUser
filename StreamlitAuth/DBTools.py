@@ -92,3 +92,65 @@ class DBTools(object):
             _ = client.get_table(table_id)  # Make an API request.
         except Exception as e:
             return f"Error getting the saved table from BigQuery: {str(e)}"
+
+    def pull_password_bigquery(
+            self,
+            bq_creds: dict,
+            project: str,
+            dataset: str,
+            table_name: str,
+            username_col: str,
+            username: str) -> Tuple[str, str]:
+        """
+        Pull a password from BigQuery.
+
+        :param bq_creds: The credentials to access the BigQuery project.
+            These should, at a minimum, have the roles of "BigQuery Data
+            Editor", "BigQuery Read Session User" and "BigQuery Job User".
+        :param project: The project to pull the data from.
+        :param dataset: The dataset to pull the data from.
+        :param table_name: The table to pull the data from.
+        :param username_col: The column that holds the username.
+        :param username: The username to pull the password for.
+        :return: A tuple with an indicator labeling the result as either
+            'success' or 'error', and the password if successful or the
+            error message if not.
+        """
+        # connect to the database
+        scope = ['https://www.googleapis.com/auth/bigquery']
+        try:
+            creds = service_account.Credentials.from_service_account_info(
+                bq_creds, scopes=scope)
+        except Exception as e:
+            return ('dev_errors', f"Error loading credentials: {str(e)}")
+
+        try:
+            client = bigquery.Client(credentials=creds)
+        except Exception as e:
+            return ('dev_errors',
+                    f"Error creating the BigQuery client: {str(e)}")
+
+        # create the query
+        table_id = project + "." + dataset + "." + table_name
+        sql_statement = (f"SELECT {username_col} FROM {table_id} "
+                         f"WHERE {username_col} = '{username}'")
+
+        # run the query
+        try:
+            query_job = client.query(sql_statement)
+            query_job.result()
+        except Exception as e:
+            return ('dev_errors', f"Error retrieving BigQuery data: {str(e)}")
+
+        # create the df pull the first value
+        df = query_job.to_dataframe()
+        try:
+            password = df.iloc[0, 0]
+        except Exception as e:
+            # we don't have a message here because this is handled by the
+            # calling function - it should combine the lack of password
+            # with the potential for an incorrect username and display
+            # something like "Incorrect username or password."
+            return ('user_errors', None)
+
+        return ('success', password)
