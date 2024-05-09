@@ -771,32 +771,60 @@ class Authenticate(object):
                   encrypt_args, email_user, email_inputs, email_creds,
                   cred_save_function, cred_save_args))
 
-    def _check_cookie(self):
-        """
-        Checks the validity of the reauthentication cookie.
-        """
-        self.token = self.cookie_manager.get(self.cookie_name)
-        st.write("token: ", self.token)
-        if self.token is not None:
-            self.token = self._token_decode()
-            st.write("token: ", self.token)
-            if self.token is not False:
-                if not st.session_state['logout']:
-                    if self.token['exp_date'] > datetime.utcnow().timestamp():
-                        if 'name' and 'username' in self.token:
-                            st.session_state['name'] = self.token['name']
-                            st.session_state['username'] = self.token['username']
-                            st.session_state['authentication_status'] = True
+    def _token_decode(self, token: dict) -> Union[str, bool]:
+        """Decodes the contents of the reauthentication cookie."""
+        try:
+            return jwt.decode(token, self.cookie_key, algorithms=['HS256'])
+        except Exception as e:
+            return False
 
-    def check_authentication_status(self):
+    def _check_cookie(self) -> bool:
+        """Checks the validity of the reauthentication cookie."""
+        token = self.cookie_manager.get(self.cookie_name)
+        if token is not None:
+            token = self._token_decode(token)
+            # we only want to accept this if we are not logged out and
+            # the token expiry is later than now
+            if (token is not False and
+                    not st.session_state.stauth['logout'] and
+                    'exp_date' in token and
+                    token['exp_date'] > datetime.utcnow().timestamp() and
+                    'username' in token):
+                st.session_state.stauth['username'] = token['username']
+                st.session_state.stauth['authentication_status'] = True
+                return True
+        return False
+
+    def check_authentication_status(self) -> bool:
+        """Check if the user is authenticated."""
         if ('stauth' in st.session_state and 'authentication_status' in
                 st.session_state.stauth and st.session_state.stauth[
                 'authentication_status']):
             return True
-        elif self._check_cookie():
-            return True
-        else:
+        return self._check_cookie()
+
+    def _check_login_session_states(self) -> bool:
+        """
+        Check on whether all session state inputs for login exist and are
+        the correct type.
+        """
+        if self.usernames_session_state not in st.session_state or \
+                not isinstance(st.session_state[self.usernames_session_state],
+                               (list, set)):
+            eh.add_dev_error(
+                'login',
+                "usernames_session_state must be a list or set "
+                "assigned to st.session_state[usernames_session_state]")
             return False
+        if self.emails_session_state not in st.session_state or \
+                not isinstance(st.session_state[self.emails_session_state],
+                               (list, set)):
+            eh.add_dev_error(
+                'login',
+                "emails_session_state must be a list or set assigned to "
+                "st.session_state[emails_session_state]")
+            return False
+        return True
 
     def _check_login_inputs(self, location: str) -> bool:
         """
@@ -823,20 +851,6 @@ class Authenticate(object):
             'username':st.session_state['username'],
             'exp_date':self.exp_date}, self.cookie_key, algorithm='HS256')
 
-    def _token_decode(self) -> str:
-        """
-        Decodes the contents of the reauthentication cookie.
-
-        Returns
-        -------
-        str
-            The decoded JWT cookie for passwordless reauthentication.
-        """
-        try:
-            return jwt.decode(self.token, self.cookie_key, algorithms=['HS256'])
-        except:
-            return False
-
     def _set_exp_date(self) -> str:
         """
         Creates the reauthentication cookie's expiry date.
@@ -861,44 +875,24 @@ class Authenticate(object):
             self.credentials['usernames'][self.username]['password'].encode())
 
     
-    def _check_credentials(self, inplace: bool=True) -> bool:
-        """
-        Checks the validity of the entered credentials.
-
-        Parameters
-        ----------
-        inplace: bool
-            Inplace setting, True: authentication status will be stored in session state, 
-            False: authentication status will be returned as bool.
-        Returns
-        -------
-        bool
-            Validity of entered credentials.
-        """
-        if self.username in self.credentials['usernames']:
-            try:
-                if self._check_pw():
-                    if inplace:
-                        st.session_state['name'] = self.credentials['usernames'][self.username]['name']
-                        self.exp_date = self._set_exp_date()
-                        self.token = self._token_encode()
-                        self.cookie_manager.set(self.cookie_name, self.token,
-                            expires_at=datetime.now() + timedelta(days=self.cookie_expiry_days))
-                        st.session_state['authentication_status'] = True
-                    else:
-                        return True
+    def _check_credentials(self, username_email: str, password: str) -> bool:
+        """Checks the validity of the entered credentials."""
+        if (username_email in st.session_state[self.usernames_session_state] or
+                username_email in st.session_state[self.emails_session_state]):
+            if self._check_pw():
+                if inplace:
+                    st.session_state.stauth['username'] = username_email
+                    self.exp_date = self._set_exp_date()
+                    self.token = self._token_encode()
+                    self.cookie_manager.set(self.cookie_name, self.token,
+                        expires_at=datetime.now() + timedelta(days=self.cookie_expiry_days))
+                    st.session_state['authentication_status'] = True
                 else:
-                    if inplace:
-                        st.session_state['authentication_status'] = False
-                    else:
-                        return False
-            except Exception as e:
-                print(e)
-        else:
-            if inplace:
-                st.session_state['authentication_status'] = False
+                    return True
             else:
-                return False
+                st.session_state['authentication_status'] = False
+        else:
+            st.session_state['authentication_status'] = False
 
     def login(self,
               location: str = 'main',
@@ -930,31 +924,27 @@ class Authenticate(object):
             customize it or have clashes with other keys/forms.
         """
         # check whether the inputs are within the correct set of options
-        if not self._check_login_inputs(location):
-            st.write("HERE")
+        if not self._check_login_session_states() or \
+                not self._check_login_inputs(location):
             return False
 
-        if ('stauth' in st.session_state and 'authentication_status' in
-                st.session_state.stauth):
-            st.write('authentication_status', st.session_state.stauth['authentication_status'])
+        if location == 'main':
+            login_form = st.form('Login')
+        elif location == 'sidebar':
+            login_form = st.sidebar.form('Login')
 
-        if not st.session_state.stauth['authentication_status']:
-            self._check_cookie()
-            if not st.session_state.stauth['authentication_status']:
-                if location == 'main':
-                    login_form = st.form('Login')
-                elif location == 'sidebar':
-                    login_form = st.sidebar.form('Login')
+        login_form.subheader('Login')
+        # we need keys for all of these so they can be accessed in the
+        # callback through session_state (such as
+        # st.session_state['login_user_username_email'])
+        username_email = login_form.text_input(
+            'Username or Email', key=email_or_username_text_key).lower()
+        password = login_form.text_input(
+            'Password', type='password', key=password_text_key)
 
-                login_form.subheader('Login')
-                self.username = login_form.text_input('Username').lower()
-                st.session_state['username'] = self.username
-                self.password = login_form.text_input('Password', type='password')
-
-                if login_form.form_submit_button('Login'):
-                    self._check_credentials()
-
-        return st.session_state['name'], st.session_state['authentication_status'], st.session_state['username']
+        login_form.form_submit_button(
+            'Login', on_click=self._check_credentials,
+            args=(username_email, password))
 
     def logout(self, button_name: str, location: str='main', key: str=None):
         """
