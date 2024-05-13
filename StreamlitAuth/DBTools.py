@@ -100,7 +100,8 @@ class DBTools(object):
             dataset: str,
             table_name: str,
             username_col: str,
-            username: str) -> Tuple[str, str]:
+            username: str,
+            password_col: str) -> Tuple[str, str]:
         """
         Pull a password from BigQuery.
 
@@ -112,6 +113,7 @@ class DBTools(object):
         :param table_name: The table to pull the data from.
         :param username_col: The column that holds the username.
         :param username: The username to pull the password for.
+        :param password_col: The column that holds the password.
         :return: A tuple with an indicator labeling the result as either
             'success' or 'error', and the password if successful or the
             error message if not.
@@ -132,7 +134,7 @@ class DBTools(object):
 
         # create the query
         table_id = project + "." + dataset + "." + table_name
-        sql_statement = (f"SELECT {username_col} FROM {table_id} "
+        sql_statement = (f"SELECT {password_col} FROM {table_id} "
                          f"WHERE {username_col} = '{username}'")
 
         # run the query

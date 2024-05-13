@@ -844,6 +844,7 @@ class Authenticate(object):
                 check_authentication_status for more information.
         """
         token = self.cookie_manager.get(self.cookie_name)
+        st.write("token", token)
         if token is not None:
             token = self._token_decode(token, encrypt_type, encrypt_args)
             # we only want to accept this if we are not logged out and
@@ -905,6 +906,7 @@ class Authenticate(object):
                     creds = service_account.Credentials.from_service_account_file(
                         our_credentials, scopes=scopes)
         """
+        st.write('st.session_state: ', st.session_state)
         if ('stauth' in st.session_state and 'authentication_status' in
                 st.session_state.stauth and st.session_state.stauth[
                 'authentication_status']):
@@ -1016,6 +1018,8 @@ class Authenticate(object):
                 dataset.
             username_col (str): The name of the column in the BigQuery
                 table that contains the usernames.
+            password_col (str): The name of the column in the BigQuery
+                table that contains the passwords.
         """
         # add the username to the arguments for the password pull function
         password_pull_args = self._add_username_to_password_pull_args(
@@ -1024,7 +1028,8 @@ class Authenticate(object):
         if isinstance(password_pull_function, str):
             if password_pull_function.lower() == 'bigquery':
                 db = DBTools()
-                indicator, value = db.pull_password_bigquery(**cred_save_args)
+                indicator, value = db.pull_password_bigquery(
+                    **password_pull_args)
             else:
                 indicator, value = (
                     'dev_errors',
@@ -1234,6 +1239,8 @@ class Authenticate(object):
                 dataset.
             username_col (str): The name of the column in the BigQuery
                 table that contains the usernames.
+            password_col (str): The name of the column in the BigQuery
+                table that contains the passwords.
         :param encrypt_type: The type of encryption to use for the user
             credentials.
             'generic': Fernet symmetric encryption.
