@@ -208,6 +208,7 @@ class DBTools(object):
             return ('dev_errors', f"Error retrieving BigQuery data: {str(e)}")
 
         # create the df pull the first value
+        import streamlit as st
         st.write("query_job", query_job)
         df = query_job.to_dataframe()
         try:
