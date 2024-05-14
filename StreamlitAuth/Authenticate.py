@@ -4,7 +4,7 @@ import jwt
 import streamlit as st
 
 from datetime import datetime, timedelta
-from typing import Callable, Union
+from typing import Callable, Tuple, Union
 
 from .Hasher import Hasher
 from .Validator import Validator
