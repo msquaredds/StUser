@@ -137,6 +137,13 @@ class DBTools(object):
         table_id = project + "." + dataset + "." + table_name
         sql_statement = (f"SELECT {password_col} FROM {table_id} "
                          f"WHERE {username_col} = '{username}'")
+        st.write("password_col", password_col)
+        st.write(type(password_col))
+        st.write("username_col", username_col)
+        st.write(type(username_col))
+        st.write("username", username)
+        st.write(type(username))
+        st.write("sql_statement", sql_statement)
 
         # run the query
         try:
