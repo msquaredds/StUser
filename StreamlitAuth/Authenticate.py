@@ -906,7 +906,6 @@ class Authenticate(object):
                     creds = service_account.Credentials.from_service_account_file(
                         our_credentials, scopes=scopes)
         """
-        st.write('st.session_state: ', st.session_state)
         if ('stauth' in st.session_state and 'authentication_status' in
                 st.session_state.stauth and st.session_state.stauth[
                 'authentication_status']):

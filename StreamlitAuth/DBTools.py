@@ -158,15 +158,15 @@ class DBTools(object):
 
         return ('success', password)
 
-    def pull_usernames_bigquery(
+    def pull_full_column_bigquery(
             self,
             bq_creds: dict,
             project: str,
             dataset: str,
             table_name: str,
-            username_col: str) -> Tuple[str, str]:
+            target_col: str) -> Tuple[str, str]:
         """
-        Pull the usernames from BigQuery.
+        Pull a full column of data from BigQuery.
 
         Note that this method isn't currently used in Authenticated, but
         is useful for gathering usernames for a login page.
@@ -177,7 +177,7 @@ class DBTools(object):
         :param project: The project to pull the data from.
         :param dataset: The dataset to pull the data from.
         :param table_name: The table to pull the data from.
-        :param username_col: The column that holds the username.
+        :param target_col: The column that holds the data.
         :return: A tuple with an indicator labeling the result as either
             'success' or 'error', and the password if successful or the
             error message if not.
@@ -198,7 +198,7 @@ class DBTools(object):
 
         # create the query
         table_id = project + "." + dataset + "." + table_name
-        sql_statement = f"SELECT {username_col} FROM {table_id}"
+        sql_statement = f"SELECT {target_col} FROM {table_id}"
 
         # run the query
         try:
@@ -207,10 +207,10 @@ class DBTools(object):
         except Exception as e:
             return ('dev_errors', f"Error retrieving BigQuery data: {str(e)}")
 
-        # create the df pull the first value
+        # create the df
         df = query_job.to_dataframe()
         try:
-            usernames = df.iloc[:, 0]
+            data = df.iloc[:, 0]
         except Exception as e:
             # we don't have a message here because this is handled by the
             # calling function - it should combine the lack of password
@@ -218,4 +218,4 @@ class DBTools(object):
             # something like "Incorrect username or password."
             return ('user_errors', None)
 
-        return ('success', usernames)
+        return ('success', data)
