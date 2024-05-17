@@ -145,6 +145,7 @@ class DBTools(object):
         st.write("username", username)
         st.write(type(username))
         st.write("sql_statement", sql_statement)
+        st.stop()
 
         # run the query
         try:
