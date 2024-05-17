@@ -137,6 +137,7 @@ class DBTools(object):
         table_id = project + "." + dataset + "." + table_name
         sql_statement = (f"SELECT {password_col} FROM {table_id} "
                          f"WHERE {username_col} = '{username}'")
+        import streamlit as st
         st.write("password_col", password_col)
         st.write(type(password_col))
         st.write("username_col", username_col)
