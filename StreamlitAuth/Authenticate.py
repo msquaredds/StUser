@@ -1166,8 +1166,11 @@ class Authenticate(object):
         """
         username = st.session_state[username_text_key]
         st.write("username", username)
+        st.write(type(username))
         password = st.session_state[password_text_key]
         st.write("password", password)
+        st.write(type(password))
+        st.stop()
 
         # make sure the username and password aren't blank
         if self._check_login_info(username, password):
@@ -1177,11 +1180,14 @@ class Authenticate(object):
                     self._check_pw(password, username, password_pull_function,
                                    password_pull_args)[0]:
                 st.session_state.stauth['username'] = username
-                st.session_state['authentication_status'] = True
+                st.session_state.stauth['authentication_status'] = True
                 exp_date = self._set_exp_date()
                 token = self._token_encode(exp_date, encrypt_type, encrypt_args)
                 self.cookie_manager.set(self.cookie_name, token,
                     expires_at=datetime.now() + timedelta(days=self.cookie_expiry_days))
+                # get rid of any errors, since we have successfully logged
+                # in
+                eh.clear_errors()
             else:
                 # if either the username was incorrect or the password doesn't
                 # match and there isn't a dev_error, we want to let the user
@@ -1190,9 +1196,9 @@ class Authenticate(object):
                                   password_pull_args)[1] == 'user_errors':
                     eh.add_user_error('login',
                                       "Incorrect username or password.")
-                st.session_state['authentication_status'] = False
+                st.session_state.stauth['authentication_status'] = False
         else:
-            st.session_state['authentication_status'] = False
+            st.session_state.stauth['authentication_status'] = False
 
     def login(self,
               location: str = 'main',
