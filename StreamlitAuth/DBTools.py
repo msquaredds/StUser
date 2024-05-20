@@ -140,6 +140,10 @@ class DBTools(object):
 
         import streamlit as st
         st.write("sql_statement: ", sql_statement)
+        st.write("username_col", username_col)
+        st.write(type(username_col))
+        st.write("username", username)
+        st.write(type(username))
 
         # run the query
         try:
