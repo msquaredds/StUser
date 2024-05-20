@@ -1034,6 +1034,7 @@ class Authenticate(object):
         # add the username to the arguments for the password pull function
         password_pull_args = self._add_username_to_password_pull_args(
             username, password_pull_args)
+        st.write("password_pull_args", password_pull_args)
         # pull the password
         if isinstance(password_pull_function, str):
             if password_pull_function.lower() == 'bigquery':
@@ -1048,6 +1049,8 @@ class Authenticate(object):
                     "function.")
         else:
             indicator, value = password_pull_function(**password_pull_args)
+        st.write("indicator", indicator)
+        st.write("value", value)
 
         # only continue if we didn't have any issues getting the password
         if self._password_pull_error_handler(indicator, value):
@@ -1166,14 +1169,16 @@ class Authenticate(object):
         """
         username = st.session_state[username_text_key]
         st.write("username", username)
-        st.write(type(username))
         password = st.session_state[password_text_key]
         st.write("password", password)
-        st.write(type(password))
-        st.stop()
 
         # make sure the username and password aren't blank
         if self._check_login_info(username, password):
+            st.write("username in session_state",
+                     st.session_state[self.usernames_session_state])
+            st.write("check_pw",
+                     self._check_pw(password, username, password_pull_function,
+                                    password_pull_args))
             # we only continue if the username exists in our list and the
             # password matches the username
             if username in st.session_state[self.usernames_session_state] and \
