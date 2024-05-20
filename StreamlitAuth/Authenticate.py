@@ -1179,6 +1179,7 @@ class Authenticate(object):
             st.write("check_pw",
                      self._check_pw(password, username, password_pull_function,
                                     password_pull_args))
+            st.stop()
             # we only continue if the username exists in our list and the
             # password matches the username
             if username in st.session_state[self.usernames_session_state] and \
