@@ -953,6 +953,20 @@ class Authenticate(object):
             return False
         return True
 
+    def _get_encrypted_username(self, encrypt_type_username: str,
+                                encrypt_args_username: dict,
+                                username: str) -> str:
+        """Get the encrypted username."""
+        if encrypt_type_username.lower() == 'generic':
+            encryptor = GenericEncryptor()
+            username = encryptor.encrypt(username)[1]
+        elif encrypt_type_username.lower() == 'google':
+            encryptor = GoogleEncryptor(**encrypt_args_username)
+            username = encryptor.encrypt(username).ciphertext
+        else:
+            username = username
+        return username
+
     def _add_username_to_password_pull_args(
             self, username: str, password_pull_args: dict) -> dict:
         """Add the username to password_pull_args."""
@@ -1127,9 +1141,10 @@ class Authenticate(object):
                  'exp_date': exp_date}
         if encrypt_type.lower() == 'generic':
             encryptor = GenericEncryptor()
+            encrypted_token = encryptor.encrypt(token)[1]
         elif encrypt_type.lower() == 'google':
             encryptor = GoogleEncryptor(**encrypt_args)
-        encrypted_token = encryptor.encrypt(token)
+            encrypted_token = encryptor.encrypt(token).ciphertext
         return encrypted_token
 
         # OLD
@@ -1188,12 +1203,8 @@ class Authenticate(object):
         # make sure the username and password aren't blank
         if self._check_login_info(username, password):
             # we need the encrypted username if that's how it was saved
-            if encrypt_type_username.lower() == 'generic':
-                encryptor = GenericEncryptor()
-                username = encryptor.encrypt(username)
-            elif encrypt_type_username.lower() == 'google':
-                encryptor = GoogleEncryptor(**encrypt_args_username)
-                username = encryptor.encrypt(username)
+            username = self._get_encrypted_username(
+                encrypt_type_username, encrypt_args_username, username)
 
             st.write("username", username)
             st.write("username in session_state",
