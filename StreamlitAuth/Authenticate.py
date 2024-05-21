@@ -1143,8 +1143,10 @@ class Authenticate(object):
             password_text_key: str,
             password_pull_function: Union[str, Callable],
             password_pull_args: dict = None,
-            encrypt_type: str = 'google',
-            encrypt_args: dict = None) -> None:
+            encrypt_type_username: str = 'google',
+            encrypt_args_username: dict = None,
+            encrypt_type_cookie: str = 'google',
+            encrypt_args_cookie: dict = None) -> None:
         """
         Checks the validity of the entered credentials.
 
@@ -1158,11 +1160,22 @@ class Authenticate(object):
         :param password_pull_args: Arguments for the
             password_pull_function. See the docstring for login for more
             information.
-        :param encrypt_type: The type of encryption to use for the user
-            credentials.
+        :param encrypt_type_username: The type of encryption to use for
+            the username. If none, set as None.
             'generic': Fernet symmetric encryption.
             'google': Google Cloud KMS (Key Management Service) API.
-        :param encrypt_args: Additional arguments for the encryption.
+        :param encrypt_args_username: Additional arguments for the
+            username encryption. Only required if encrypt_type_username is
+            not None.
+            Encryption: Currently only needed if using 'google'
+                encryption. See the docstring for login for more
+                information.
+        :param encrypt_type_cookie: The type of encryption to use for
+            the cookie.
+            'generic': Fernet symmetric encryption.
+            'google': Google Cloud KMS (Key Management Service) API.
+        :param encrypt_args_cookie: Additional arguments for the cookie
+            encryption.
             Encryption: Currently only needed if using 'google'
                 encryption. See the docstring for login for more
                 information.
@@ -1174,12 +1187,22 @@ class Authenticate(object):
 
         # make sure the username and password aren't blank
         if self._check_login_info(username, password):
+            # we need the encrypted username if that's how it was saved
+            if encrypt_type_username.lower() == 'generic':
+                encryptor = GenericEncryptor()
+                username = encryptor.encrypt(username)
+            elif encrypt_type_username.lower() == 'google':
+                encryptor = GoogleEncryptor(**encrypt_args_username)
+                username = encryptor.encrypt(username)
+
+            st.write("username", username)
             st.write("username in session_state",
                      st.session_state[self.usernames_session_state])
             st.write("check_pw",
                      self._check_pw(password, username, password_pull_function,
                                     password_pull_args))
             st.stop()
+
             # we only continue if the username exists in our list and the
             # password matches the username
             if username in st.session_state[self.usernames_session_state] and \
@@ -1188,7 +1211,8 @@ class Authenticate(object):
                 st.session_state.stauth['username'] = username
                 st.session_state.stauth['authentication_status'] = True
                 exp_date = self._set_exp_date()
-                token = self._token_encode(exp_date, encrypt_type, encrypt_args)
+                token = self._token_encode(exp_date, encrypt_type_cookie,
+                                           encrypt_args_cookie)
                 self.cookie_manager.set(self.cookie_name, token,
                     expires_at=datetime.now() + timedelta(days=self.cookie_expiry_days))
                 # get rid of any errors, since we have successfully logged
@@ -1212,8 +1236,10 @@ class Authenticate(object):
               password_text_key: str = 'login_password',
               password_pull_function: Union[str, Callable] = 'bigquery',
               password_pull_args: dict = None,
-              encrypt_type: str = 'google',
-              encrypt_args: dict = None) -> None:
+              encrypt_type_username: str = 'google',
+              encrypt_args_username: dict = None,
+              encrypt_type_cookie: str = 'google',
+              encrypt_args_cookie: dict = None) -> None:
         """
         Creates a login widget.
 
@@ -1274,13 +1300,18 @@ class Authenticate(object):
                 table that contains the usernames.
             password_col (str): The name of the column in the BigQuery
                 table that contains the passwords.
-        :param encrypt_type: The type of encryption to use for the user
-            credentials.
+        :param encrypt_type_username: The type of encryption to use for
+            the username. If we originally saved an encrypted username, we
+            need the same encryption here, so we can change the user's
+            entered username to encrypted bytes and compare it to the
+            saved encrypted bytes. If none, set as None.
             'generic': Fernet symmetric encryption.
             'google': Google Cloud KMS (Key Management Service) API.
-        :param encrypt_args: Additional arguments for the encryption.
+        :param encrypt_args_username: Additional arguments for the
+            username encryption.  Only required if encrypt_type_username
+            is not None.
             These will be a dictionary of arguments for whatever function
-            is used to encrypt the credentials.
+            is used to encrypt the username.
 
             If using 'google' encryption, the following arguments are
             required:
@@ -1312,6 +1343,13 @@ class Authenticate(object):
                     our_credentials = 'service_account_key_file.json'
                     creds = service_account.Credentials.from_service_account_file(
                         our_credentials, scopes=scopes)
+        :param encrypt_type_cookie: The type of encryption to use for
+            the cookie.
+            'generic': Fernet symmetric encryption.
+            'google': Google Cloud KMS (Key Management Service) API.
+        :param encrypt_args_cookie: Additional arguments for the cookie
+            encryption. See the variable encrypt_args_username for more
+            detail, as the arguments can be the same for either.
         """
         # check whether the inputs are within the correct set of options
         if not self._check_login_session_states() or \
@@ -1334,8 +1372,10 @@ class Authenticate(object):
 
         login_form.form_submit_button(
             'Login', on_click=self._check_credentials,
-            args=(username_text_key, password_text_key, password_pull_function,
-                  password_pull_args, encrypt_type, encrypt_args))
+            args=(username_text_key, password_text_key,
+                  password_pull_function, password_pull_args,
+                  encrypt_type_username, encrypt_args_username,
+                  encrypt_type_cookie, encrypt_args_cookie))
 
     def logout(self, button_name: str, location: str='main', key: str=None):
         """
