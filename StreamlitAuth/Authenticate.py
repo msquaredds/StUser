@@ -3,6 +3,7 @@ import extra_streamlit_components as stx
 import jwt
 import streamlit as st
 
+from base64 import b64encode
 from datetime import datetime, timedelta
 from typing import Callable, Tuple, Union
 
@@ -960,9 +961,13 @@ class Authenticate(object):
         if encrypt_type_username.lower() == 'generic':
             encryptor = GenericEncryptor()
             username = encryptor.encrypt(username)[1]
+            username = b64encode(username).decode('utf-8')
         elif encrypt_type_username.lower() == 'google':
             encryptor = GoogleEncryptor(**encrypt_args_username)
             username = encryptor.encrypt(username).ciphertext
+            st.write("username enc", username)
+            username = b64encode(username).decode('utf-8')
+            st.write("username enc b64", username)
         else:
             username = username
         return username
@@ -1206,9 +1211,6 @@ class Authenticate(object):
             username = self._get_encrypted_username(
                 encrypt_type_username, encrypt_args_username, username)
 
-            st.write("username", username)
-            st.write("username in session_state",
-                     st.session_state[self.usernames_session_state])
             st.write("check_pw",
                      self._check_pw(password, username, password_pull_function,
                                     password_pull_args))
