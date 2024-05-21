@@ -136,7 +136,7 @@ class DBTools(object):
         # create the query
         table_id = project + "." + dataset + "." + table_name
         sql_statement = (f"SELECT {password_col} FROM {table_id} "
-                         f"WHERE {username_col} = {username}")
+                         f"WHERE {username_col} = FROM_BASE64({username})")
 
         import streamlit as st
         st.write("sql_statement: ", sql_statement)
