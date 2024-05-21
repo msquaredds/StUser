@@ -135,21 +135,11 @@ class DBTools(object):
 
         # create the query
         table_id = project + "." + dataset + "." + table_name
-        sql_statement = (f'SELECT {password_col} FROM {table_id} '
-                         f'WHERE {username_col} = "{username}"')
+        sql_statement = (f"SELECT {password_col} FROM {table_id} "
+                         f"WHERE {username_col} = {username}")
 
         import streamlit as st
         st.write("sql_statement: ", sql_statement)
-        st.write("username_col", username_col)
-        st.write(type(username_col))
-        st.write("username", username)
-        st.write(type(username))
-
-        # from sqlalchemy import text
-        # sql_statement = text(f'SELECT {password_col} FROM {table_id} '
-        #                      f'WHERE {username_col} = "{username}"')
-        #
-        # st.write("sql_statement: ", sql_statement)
 
         # run the query
         try:
