@@ -136,14 +136,21 @@ class DBTools(object):
         # create the query
         table_id = project + "." + dataset + "." + table_name
         sql_statement = (f"SELECT {password_col} FROM {table_id} "
-                         f"WHERE {username_col} = {username}")
+                         f"WHERE {username_col} = @username")
+
+        # set up the query parameters
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("username", "STRING", username)
+            ]
+        )
 
         import streamlit as st
         st.write("sql_statement: ", sql_statement)
 
         # run the query
         try:
-            query_job = client.query(sql_statement)
+            query_job = client.query(sql_statement, job_config=job_config)
             query_job.result()
         except Exception as e:
             return ('dev_errors', f"Error retrieving BigQuery data: {str(e)}")
