@@ -220,17 +220,9 @@ class Authenticate(object):
         return True
 
     def _register_credentials(self, username: str, password: str,
-                              email: str, preauthorization: bool,
-                              encrypt_type: str,
-                              encrypt_args: dict = None) -> None:
+                              email: str, preauthorization: bool) -> None:
         """
         Adds to credentials dictionary the new user's information.
-
-        Note that for the generic version we get and store a key and
-        token for each username and email, while for the google version
-        we just get and store a ciphertext for each username and email
-        (the key is typically the same and is what is accessed by
-        passing in 'kms_credentials' through kwargs).
 
         :param username: The username of the new user.
         :param password: The password of the new user.
@@ -238,77 +230,20 @@ class Authenticate(object):
         :param preauthorization: The preauthorization requirement.
             True: user must be preauthorized to register.
             False: any user can register.
-        :param encrypt_type: The type of encryption to use for the user
-            credentials.
-            'generic': Fernet symmetric encryption.
-            'google': Google Cloud KMS (Key Management Service) API.
-        :param encrypt_args: Additional arguments for the encryption.
-            These will be a dictionary of arguments for whatever function
-            is used to encrypt the credentials.
-
-            Currently only needed if using 'google' encryption, in which
-            case the following arguments are required:
-
-            project_id (string): Google Cloud project ID
-                (e.g. 'my-project').
-            location_id (string): Cloud KMS location (e.g. 'us-east1').
-            key_ring_id (string): ID of the Cloud KMS key ring
-                (e.g. 'my-key-ring').
-            key_id (string): ID of the key to use (e.g. 'my-key').
-            kms_credentials (google.oauth2.service_account.Credentials):
-                The credentials to use for the KMS (Key Management
-                Service). If running the application in App Engine or
-                another service that recognizes the credentials
-                automatically, you can ignore this.
-
-                For example, if you set up a service account in the same
-                google cloud project that has the KMS. This service
-                account must be permissioned (at a minimum) as a "Cloud
-                KMS CryptoKey Encrypter" in order to use the KMS here.
-
-                Example code to get the credentials (you must install
-                    google-auth-oauthlib and google-auth in your
-                    environment):
-                    from google.oauth2 import service_account
-                    scopes = ['https://www.googleapis.com/auth/cloudkms']
-                    # this is just a file that stores the key info (the
-                    # service account key, not the KMS key) in a JSON file
-                    our_credentials = 'service_account_key_file.json'
-                    creds = service_account.Credentials.from_service_account_file(
-                        our_credentials, scopes=scopes)
         """
         # we want to add our new username and email to the session state,
         # so they can't be accidentally registered again
         st.session_state[self.usernames_session_state].append(username)
         st.session_state[self.emails_session_state].append(email)
 
-        # encrypt / hash info
-        if encrypt_type.lower() == 'generic':
-            encryptor = GenericEncryptor()
-        elif encrypt_type.lower() == 'google':
-            encryptor = GoogleEncryptor(**encrypt_args)
-        enc_username = encryptor.encrypt(username)
-        enc_email = encryptor.encrypt(email)
+        # hash password
         password = Hasher([password]).generate()[0]
 
         # store the credentials
-        # note that for the generic version we get and store a key and
-        # token for each username and email, while for the google version
-        # we just get and store a ciphertext for each username and email
-        # (the key is typically the same and is what is accessed by
-        # passing in 'kms_credentials' through kwargs)
-        if encrypt_type.lower() == 'generic':
-            st.session_state[self.user_credentials_session_state] = {
-                'username': {'key': enc_username[0],
-                             'token': enc_username[1]},
-                'email': {'key': enc_email[0],
-                          'token': enc_email[1]},
-                'password': password}
-        elif encrypt_type.lower() == 'google':
-            st.session_state[self.user_credentials_session_state] = {
-                'username': enc_username.ciphertext,
-                'email': enc_email.ciphertext,
-                'password': password}
+        st.session_state[self.user_credentials_session_state] = {
+            'username': username,
+            'email': email,
+            'password': password}
 
         # if we had the name preauthorized, remove it from that list
         if preauthorization:
@@ -451,8 +386,6 @@ class Authenticate(object):
             password_text_key: str,
             repeat_password_text_key: str,
             preauthorization: bool,
-            encrypt_type: str,
-            encrypt_args: dict = None,
             email_user: Union[callable, str] = None,
             email_inputs: dict = None,
             email_creds: dict = None,
@@ -473,14 +406,6 @@ class Authenticate(object):
         :param preauthorization: The preauthorization requirement.
             True: user must be preauthorized to register.
             False: any user can register.
-        :param encrypt_type: The type of encryption to use for the user
-            credentials.
-            'generic': Fernet symmetric encryption.
-            'google': Google Cloud KMS (Key Management Service) API.
-        :param encrypt_args: Additional arguments for the encryption.
-            Encryption: Currently only needed if using 'google'
-                encryption. See the docstring for register_user for more
-                information.
         :param email_user: If we want to email the user after registering,
             provide the function (callable) or method (str) for email
             here.  See the docstring for register_user for more
@@ -519,8 +444,7 @@ class Authenticate(object):
                 new_email, new_username, new_password, new_password_repeat,
                 preauthorization):
             self._register_credentials(
-                new_username, new_password, new_email, preauthorization,
-                encrypt_type, encrypt_args)
+                new_username, new_password, new_email, preauthorization)
             # we can either try to save credentials and email, save
             # credentials and not email, just email, or none of the above
             if cred_save_function is not None:
@@ -545,8 +469,6 @@ class Authenticate(object):
     def register_user(self,
                       location: str = 'main',
                       preauthorization: bool = False,
-                      encrypt_type: str = 'google',
-                      encrypt_args: dict = None,
                       email_text_key: str = 'register_user_email',
                       username_text_key: str = 'register_user_username',
                       password_text_key: str = 'register_user_password',
@@ -560,55 +482,11 @@ class Authenticate(object):
         """
         Creates a new user registration widget.
 
-        Note that for the generic encrypt_type we get and store a key and
-        token for each username and email, while for the google version
-        we just get and store a ciphertext for each username and email
-        (the key is typically the same for all encrypted texts and is what
-        is accessed by passing in 'kms_credentials' through kwargs).
-
         :param location: The location of the register new user form i.e.
             main or sidebar.
         :param preauthorization: The preauthorization requirement.
             True: user must be preauthorized to register.
             False: any user can register.
-        :param encrypt_type: The type of encryption to use for the user
-            credentials.
-            'generic': Fernet symmetric encryption.
-            'google': Google Cloud KMS (Key Management Service) API.
-        :param encrypt_args: Additional arguments for the encryption.
-            These will be a dictionary of arguments for whatever function
-            is used to encrypt the credentials.
-
-            If using 'google' encryption, the following arguments are
-            required:
-
-            project_id (string): Google Cloud project ID
-                (e.g. 'my-project').
-            location_id (string): Cloud KMS location (e.g. 'us-east1').
-            key_ring_id (string): ID of the Cloud KMS key ring
-                (e.g. 'my-key-ring').
-            key_id (string): ID of the key to use (e.g. 'my-key').
-            kms_credentials (google.oauth2.service_account.Credentials):
-                The credentials to use for the KMS (Key Management
-                Service). If running the application in App Engine or
-                another service that recognizes the credentials
-                automatically, you can ignore this.
-
-                For example, if you set up a service account in the same
-                google cloud project that has the KMS. This service
-                account must be permissioned (at a minimum) as a "Cloud
-                KMS CryptoKey Encrypter" in order to use the KMS here.
-
-                Example code to get the credentials (you must install
-                    google-auth-oauthlib and google-auth in your
-                    environment):
-                    from google.oauth2 import service_account
-                    scopes = ['https://www.googleapis.com/auth/cloudkms']
-                    # this is just a file that stores the key info (the
-                    # service account key, not the KMS key) in a JSON file
-                    our_credentials = 'service_account_key_file.json'
-                    creds = service_account.Credentials.from_service_account_file(
-                        our_credentials, scopes=scopes)
         :param email_text_key: The key for the email text input on the
             registration form. We attempt to default to a unique key, but
             you can put your own in here if you want to customize it or
@@ -768,9 +646,9 @@ class Authenticate(object):
         register_user_form.form_submit_button(
             'Register', on_click=self._check_and_register_user,
             args=(email_text_key, username_text_key, password_text_key,
-                  repeat_password_text_key, preauthorization, encrypt_type,
-                  encrypt_args, email_user, email_inputs, email_creds,
-                  cred_save_function, cred_save_args))
+                  repeat_password_text_key, preauthorization, email_user,
+                  email_inputs, email_creds, cred_save_function,
+                  cred_save_args))
 
     def _token_decode(self, token: dict, encrypt_type: str,
                       encrypt_args: dict = None) -> dict:
@@ -1163,8 +1041,6 @@ class Authenticate(object):
             password_text_key: str,
             password_pull_function: Union[str, Callable],
             password_pull_args: dict = None,
-            encrypt_type_username: str = 'google',
-            encrypt_args_username: dict = None,
             encrypt_type_cookie: str = 'google',
             encrypt_args_cookie: dict = None) -> None:
         """
@@ -1180,16 +1056,6 @@ class Authenticate(object):
         :param password_pull_args: Arguments for the
             password_pull_function. See the docstring for login for more
             information.
-        :param encrypt_type_username: The type of encryption to use for
-            the username. If none, set as None.
-            'generic': Fernet symmetric encryption.
-            'google': Google Cloud KMS (Key Management Service) API.
-        :param encrypt_args_username: Additional arguments for the
-            username encryption. Only required if encrypt_type_username is
-            not None.
-            Encryption: Currently only needed if using 'google'
-                encryption. See the docstring for login for more
-                information.
         :param encrypt_type_cookie: The type of encryption to use for
             the cookie.
             'generic': Fernet symmetric encryption.
@@ -1207,9 +1073,6 @@ class Authenticate(object):
 
         # make sure the username and password aren't blank
         if self._check_login_info(username, password):
-            # we need the encrypted username if that's how it was saved
-            username = self._get_encrypted_username(
-                encrypt_type_username, encrypt_args_username, username)
 
             st.write("check_pw",
                      self._check_pw(password, username, password_pull_function,
@@ -1249,8 +1112,6 @@ class Authenticate(object):
               password_text_key: str = 'login_password',
               password_pull_function: Union[str, Callable] = 'bigquery',
               password_pull_args: dict = None,
-              encrypt_type_username: str = 'google',
-              encrypt_args_username: dict = None,
               encrypt_type_cookie: str = 'google',
               encrypt_args_cookie: dict = None) -> None:
         """
@@ -1313,49 +1174,6 @@ class Authenticate(object):
                 table that contains the usernames.
             password_col (str): The name of the column in the BigQuery
                 table that contains the passwords.
-        :param encrypt_type_username: The type of encryption to use for
-            the username. If we originally saved an encrypted username, we
-            need the same encryption here, so we can change the user's
-            entered username to encrypted bytes and compare it to the
-            saved encrypted bytes. If none, set as None.
-            'generic': Fernet symmetric encryption.
-            'google': Google Cloud KMS (Key Management Service) API.
-        :param encrypt_args_username: Additional arguments for the
-            username encryption.  Only required if encrypt_type_username
-            is not None.
-            These will be a dictionary of arguments for whatever function
-            is used to encrypt the username.
-
-            If using 'google' encryption, the following arguments are
-            required:
-
-            project_id (string): Google Cloud project ID
-                (e.g. 'my-project').
-            location_id (string): Cloud KMS location (e.g. 'us-east1').
-            key_ring_id (string): ID of the Cloud KMS key ring
-                (e.g. 'my-key-ring').
-            key_id (string): ID of the key to use (e.g. 'my-key').
-            kms_credentials (google.oauth2.service_account.Credentials):
-                The credentials to use for the KMS (Key Management
-                Service). If running the application in App Engine or
-                another service that recognizes the credentials
-                automatically, you can ignore this.
-
-                For example, if you set up a service account in the same
-                google cloud project that has the KMS. This service
-                account must be permissioned (at a minimum) as a "Cloud
-                KMS CryptoKey Encrypter" in order to use the KMS here.
-
-                Example code to get the credentials (you must install
-                    google-auth-oauthlib and google-auth in your
-                    environment):
-                    from google.oauth2 import service_account
-                    scopes = ['https://www.googleapis.com/auth/cloudkms']
-                    # this is just a file that stores the key info (the
-                    # service account key, not the KMS key) in a JSON file
-                    our_credentials = 'service_account_key_file.json'
-                    creds = service_account.Credentials.from_service_account_file(
-                        our_credentials, scopes=scopes)
         :param encrypt_type_cookie: The type of encryption to use for
             the cookie.
             'generic': Fernet symmetric encryption.
@@ -1387,7 +1205,6 @@ class Authenticate(object):
             'Login', on_click=self._check_credentials,
             args=(username_text_key, password_text_key,
                   password_pull_function, password_pull_args,
-                  encrypt_type_username, encrypt_args_username,
                   encrypt_type_cookie, encrypt_args_cookie))
 
     def logout(self, button_name: str, location: str='main', key: str=None):
