@@ -1,5 +1,5 @@
 from argon2 import PasswordHasher
-from Typing import Union
+from typing import Union
 
 
 class Hasher(object):
