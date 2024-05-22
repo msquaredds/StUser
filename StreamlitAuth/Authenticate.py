@@ -862,20 +862,38 @@ class Authenticate(object):
                 "Error: " + value)
             return False
         elif indicator == 'user_errors':
-            # we don't have a message here because this is handled by the
-            # calling function - it should combine the lack of password
-            # with the potential for an incorrect username and display
-            # something like "Incorrect username or password."
+            eh.add_user_error(
+                'login',
+                "Incorrect username or password.")
             return False
         return True
+
+    def _password_verification_error_handler(
+            self, verified: Union[bool, tuple]) -> bool:
+        """Check if the password was verified and record an error if
+            not."""
+        if isinstance(verified, tuple):
+            # if we have a tuple, that means we had a 'dev_errors'
+            # issue, which should be handled accordingly
+            eh.add_dev_error(
+                'login',
+                "There was an error checking the user's password. "
+                "Error: " + verified[1])
+            return False
+        elif verified:
+            return True
+        else:
+            eh.add_user_error(
+                'login',
+                "Incorrect username or password.")
+            return False
 
     def _check_pw(
             self,
             password: str,
             username: str,
             password_pull_function: Union[str, Callable],
-            password_pull_args: dict=None) -> Tuple[bool, Union[str, None],
-                                                    Union[str, None]]:
+            password_pull_args: dict=None) -> bool:
         """
         Pulls the expected password and checks the validity of the entered
         password.
@@ -946,19 +964,10 @@ class Authenticate(object):
         # only continue if we didn't have any issues getting the password
         if self._password_pull_error_handler(indicator, value):
             verified = Hasher([password]).check([value])[0]
-            if verified:
-                # in this case we just want to know that we successfully
-                # matched the password
-                return True, None, None
-            else:
-                # here we need to let the calling function know that we
-                # didn't match the password and that this was a
-                # 'user_errors', which should be handled accordingly
-                return False, 'user_errors', None
-        # if we had an issue getting the password, we need to let the
-        # calling function know that we had either a 'dev_errors' issue or
-        # a 'user_errors' issue, which should be handled accordingly
-        return False, indicator, value
+            # we can have errors here if the password doesn't match or
+            # there is an issue running the check
+            return self._password_verification_error_handler(verified)
+        return False
 
     def _set_exp_date(self) -> str:
         """

@@ -1,4 +1,5 @@
 from argon2 import PasswordHasher
+from Typing import Union
 
 
 class Hasher(object):
@@ -31,7 +32,7 @@ class Hasher(object):
         """
         return [self._hash(password) for password in self.passwords]
 
-    def _verify(self, hash: str, password: str) -> bool:
+    def _verify(self, hash: str, password: str) -> Union[bool, str]:
         """
         Verifies the password against the hash.
 
@@ -40,7 +41,13 @@ class Hasher(object):
 
         :return: True if the password matches the hash, False otherwise.
         """
-        return self.ph.verify(hash, password)
+        try:
+            self.ph.verify(hash, password)
+            return True
+        except VerifyMismatchError as e:
+            return False
+        except (VerificationError, InvalidHashError) as e:
+            return 'dev_error', e
 
     def check(self, hashes: list) -> list:
         """
