@@ -611,7 +611,7 @@ class Authenticate(object):
         # correct type and whether the inputs are within the correct set
         # of options
         if not self._check_register_user_session_states(preauthorization) or \
-                not self._check_register_user_inputs(location, encrypt_type):
+                not self._check_register_user_inputs(location):
             return False
 
         # we need all the usernames to be lowercase
