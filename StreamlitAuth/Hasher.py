@@ -1,3 +1,5 @@
+import argon2
+
 from argon2 import PasswordHasher
 from typing import Union
 
@@ -44,9 +46,10 @@ class Hasher(object):
         try:
             self.ph.verify(hash, password)
             return True
-        except VerifyMismatchError as e:
+        except argon2.exceptions.VerifyMismatchError as e:
             return False
-        except (VerificationError, InvalidHashError) as e:
+        except (argon2.exceptions.VerificationError,
+                argon2.exceptions.InvalidHashError) as e:
             return 'dev_error', e
 
     def check(self, hashes: list) -> list:
