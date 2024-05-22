@@ -168,7 +168,7 @@ class DBTools(object):
             project: str,
             dataset: str,
             table_name: str,
-            target_col: str) -> Tuple[str, str]:
+            target_col: str) -> Tuple[str, pd.Series]:
         """
         Pull a full column of data from BigQuery.
 

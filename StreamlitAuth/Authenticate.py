@@ -130,8 +130,7 @@ class Authenticate(object):
                 return False
         return True
 
-    def _check_register_user_inputs(self, location: str,
-                                    encrypt_type: str) -> bool:
+    def _check_register_user_inputs(self, location: str) -> bool:
         """
         Check whether the register_user inputs are within the correct set
         of options.
@@ -140,11 +139,6 @@ class Authenticate(object):
             eh.add_dev_error(
                 'register_user',
                 "location argument must be one of 'main' or 'sidebar'")
-            return False
-        if encrypt_type.lower() not in ['generic', 'google']:
-            eh.add_dev_error(
-                'register_user',
-                "encrypt_type argument must be one of 'generic' or 'google'")
             return False
         return True
 
