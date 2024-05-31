@@ -138,9 +138,6 @@ class DBTools(object):
         sql_statement = (f"SELECT {password_col} FROM {table_id} "
                          f"WHERE {username_col} = '{username}'")
 
-        import streamlit as st
-        st.write("sql_statement: ", sql_statement)
-
         # run the query
         try:
             query_job = client.query(sql_statement)

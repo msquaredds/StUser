@@ -943,7 +943,6 @@ class Authenticate(object):
         # add the username to the arguments for the password pull function
         password_pull_args = self._add_username_to_password_pull_args(
             username, password_pull_args)
-        st.write("password_pull_args", password_pull_args)
         # pull the password
         if isinstance(password_pull_function, str):
             if password_pull_function.lower() == 'bigquery':
@@ -1076,20 +1075,17 @@ class Authenticate(object):
 
         # make sure the username and password aren't blank
         if self._check_login_info(username, password):
-
-            st.write("check_pw",
-                     self._check_pw(password, username, password_pull_function,
-                                    password_pull_args))
-            st.stop()
-
             # we only continue if the username exists in our list and the
             # password matches the username
             if username in st.session_state[self.usernames_session_state] and \
                     self._check_pw(password, username, password_pull_function,
                                    password_pull_args)[0]:
+                st.write("password true")
                 st.session_state.stauth['username'] = username
                 st.session_state.stauth['authentication_status'] = True
                 exp_date = self._set_exp_date()
+                st.write("exp_date", exp_date)
+                st.stop()
                 token = self._token_encode(exp_date, encrypt_type_cookie,
                                            encrypt_args_cookie)
                 self.cookie_manager.set(self.cookie_name, token,
