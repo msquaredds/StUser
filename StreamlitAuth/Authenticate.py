@@ -4,7 +4,7 @@ import jwt
 import streamlit as st
 
 from base64 import b64encode
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Callable, Tuple, Union
 
 from .Hasher import Hasher
@@ -984,8 +984,7 @@ class Authenticate(object):
         :return: The JWT cookie's expiry timestamp in Unix epoch.
         """
         st.write("self.cookie_expiry_days", self.cookie_expiry_days)
-        return (datetime.now(timezone.UTC) + timedelta(
-            days=self.cookie_expiry_days)).timestamp()
+        return datetime.utcnow() + timedelta(days=self.cookie_expiry_days)
 
     def _token_encode(self, exp_date: str, encrypt_type: str,
                       encrypt_args: dict=None) -> str:
