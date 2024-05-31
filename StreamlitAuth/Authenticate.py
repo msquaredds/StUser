@@ -1024,11 +1024,13 @@ class Authenticate(object):
         """
         token = {'username': st.session_state.stauth['username'],
                  'exp_date': exp_date}
+        st.write("token", token)
         if encrypt_type.lower() == 'generic':
             encryptor = GenericEncryptor()
             encrypted_token = encryptor.encrypt(token)[1]
         elif encrypt_type.lower() == 'google':
             encryptor = GoogleEncryptor(**encrypt_args)
+            st.write("encryption", encryptor.encrypt(token))
             encrypted_token = encryptor.encrypt(token).ciphertext
         return encrypted_token
 
@@ -1085,9 +1087,10 @@ class Authenticate(object):
                 st.session_state.stauth['authentication_status'] = True
                 exp_date = self._set_exp_date()
                 st.write("exp_date", exp_date)
-                st.stop()
                 token = self._token_encode(exp_date, encrypt_type_cookie,
                                            encrypt_args_cookie)
+                st.write("token", token)
+                st.stop()
                 self.cookie_manager.set(self.cookie_name, token,
                     expires_at=datetime.now() + timedelta(days=self.cookie_expiry_days))
                 # get rid of any errors, since we have successfully logged

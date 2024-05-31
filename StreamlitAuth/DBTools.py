@@ -147,7 +147,6 @@ class DBTools(object):
 
         # create the df pull the first value
         df = query_job.to_dataframe()
-        st.write("df: ", df)
         try:
             password = df.iloc[0, 0]
         except Exception as e:
