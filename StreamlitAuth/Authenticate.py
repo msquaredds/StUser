@@ -888,6 +888,15 @@ class Authenticate(object):
                 "Incorrect username or password.")
             return False
 
+    def _check_username(self, username: str) -> bool:
+        """Check if the username is in the list of usernames."""
+        if username not in st.session_state[self.usernames_session_state]:
+            eh.add_user_error(
+                'login',
+                "Incorrect username or password.")
+            return False
+        return True
+
     def _check_pw(
             self,
             password: str,
@@ -1076,36 +1085,29 @@ class Authenticate(object):
         st.write("password", password)
 
         # make sure the username and password aren't blank
-        if self._check_login_info(username, password):
-            # we only continue if the username exists in our list and the
-            # password matches the username
-            if username in st.session_state[self.usernames_session_state] and \
-                    self._check_pw(password, username, password_pull_function,
-                                   password_pull_args)[0]:
-                st.write("password true")
-                st.session_state.stauth['username'] = username
-                st.session_state.stauth['authentication_status'] = True
-                exp_date = self._set_exp_date()
-                st.write("exp_date", exp_date)
-                token = self._token_encode(exp_date, encrypt_type_cookie,
-                                           encrypt_args_cookie)
-                st.write("token", token)
-                st.stop()
-                self.cookie_manager.set(self.cookie_name, token,
-                    expires_at=datetime.now() + timedelta(days=self.cookie_expiry_days))
-                # get rid of any errors, since we have successfully logged
-                # in
-                eh.clear_errors()
-            else:
-                # if either the username was incorrect or the password doesn't
-                # match and there isn't a dev_error, we want to let the user
-                # know that the username or password was incorrect
-                if self._check_pw(password, username, password_pull_function,
-                                  password_pull_args)[1] == 'user_errors':
-                    eh.add_user_error('login',
-                                      "Incorrect username or password.")
-                st.session_state.stauth['authentication_status'] = False
+        # and only continue if the username exists in our list and the
+        # password matches the username
+        if self._check_login_info(username, password) and \
+                self._check_username(username) and \
+                self._check_pw(password, username, password_pull_function,
+                               password_pull_args):
+            st.write("password true")
+            st.session_state.stauth['username'] = username
+            st.session_state.stauth['authentication_status'] = True
+            exp_date = self._set_exp_date()
+            st.write("exp_date", exp_date)
+            token = self._token_encode(exp_date, encrypt_type_cookie,
+                                       encrypt_args_cookie)
+            st.write("token", token)
+            st.stop()
+            self.cookie_manager.set(self.cookie_name, token,
+                expires_at=datetime.now() + timedelta(days=self.cookie_expiry_days))
+            # get rid of any errors, since we have successfully logged
+            # in
+            eh.clear_errors()
         else:
+            # here we have already set any errors in previous functions,
+            # so just set authentication_status to false
             st.session_state.stauth['authentication_status'] = False
 
     def login(self,
