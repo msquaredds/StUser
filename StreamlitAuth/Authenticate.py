@@ -793,8 +793,6 @@ class Authenticate(object):
                     "function.")
         else:
             indicator, value = password_pull_function(**password_pull_args)
-        st.write("indicator", indicator)
-        st.write("value", value)
 
         # only continue if we didn't have any issues getting the password
         if self._password_pull_error_handler(indicator, value):
@@ -825,9 +823,7 @@ class Authenticate(object):
             information.
         """
         username = st.session_state[username_text_key]
-        st.write("username", username)
         password = st.session_state[password_text_key]
-        st.write("password", password)
 
         # make sure the username and password aren't blank
         # and only continue if the username exists in our list and the
@@ -836,7 +832,6 @@ class Authenticate(object):
                 self._check_username(username) and \
                 self._check_pw(password, username, password_pull_function,
                                password_pull_args):
-            st.write("password true")
             st.session_state.stauth['username'] = username
             st.session_state.stauth['authentication_status'] = True
             # get rid of any errors, since we have successfully logged in
