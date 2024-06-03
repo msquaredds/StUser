@@ -7,6 +7,7 @@ from StreamlitAuth import ErrorHandling as eh
 from StreamlitAuth.DBTools import DBTools
 from StreamlitAuth.Email import Email
 from StreamlitAuth.Encryptor import GenericEncryptor, GoogleEncryptor
+from StreamlitAuth.Hasher import Hasher
 
 
 class Authenticate(object):
