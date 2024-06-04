@@ -672,24 +672,165 @@ class Authenticate(object):
             return False
         return True
 
-    def _add_username_to_password_pull_args(
-            self, username: str, password_pull_args: dict) -> dict:
-        """Add the username to password_pull_args."""
-        if password_pull_args is None:
-            password_pull_args = {}
-        password_pull_args['username'] = username
-        return password_pull_args
+    def _check_username(self, username: str) -> bool:
+        """Check if the username is in the list of usernames."""
+        if username not in st.session_state[self.usernames_session_state]:
+            eh.add_user_error(
+                'login',
+                "Incorrect username or password.")
+            return False
+        return True
+
+    def _add_username_to_args(
+            self, username: str, existing_args: dict) -> dict:
+        """Add the username to existing_args."""
+        if existing_args is None:
+            existing_args = {}
+        existing_args['username'] = username
+        return existing_args
+
+    def _bigquery_locked_info(self, locked_info_args: dict) -> bool:
+        """
+        Pull the locked information from BigQuery and check whether the
+        account has been locked more recently than unlocked.
+
+        :param locked_info_args: The arguments for the
+            locked_info_function. See the docstring for
+            _check_locked_account for more information.
+        :return: True if the account is locked, False if the account is
+            unlocked.
+        """
+        db = DBTools()
+        indicator, value = db.pull_locked_info_bigquery(**locked_info_args)
+
+        # we only have dev_error's in this case, no user_error's
+        if indicator == 'dev_error':
+            eh.add_dev_error(
+                'login',
+                "There was an error checking the user's login attempts. "
+                "Error: " + value)
+            return True
+
+        # if no errors, pull out the latest lock and unlock times
+        latest_lock, latest_unlock = value
+        # we are locked if the times both exist and the latest lock is
+        # more recent, or if the latest lock exists and the latest unlock
+        # does not
+        if ((latest_lock is not None and latest_unlock is not None
+                and latest_lock > latest_unlock)
+                or
+                (latest_lock is not None and latest_unlock is None)):
+            eh.add_user_error(
+                'login',
+                "Your account is locked. Please try again later.")
+            return True
+        return False
+
+    def _check_locked_account(
+            self,
+            username: str,
+            locked_info_function: Union[str, Callable] = None,
+            locked_info_args: dict = None) -> bool:
+        """
+        Check if we have a locked account for the given username.
+
+        This should include checking whether the account is locked in
+        the session_state, which always happens, and checking if there is
+        a lock stored elsewhere, such as in a database. The checking of
+        the lock elsewhere is not required for this function to run, but
+        is HIGHLY RECOMMENDED since the session state can be easily
+        cleared by the user, which would allow them to bypass the lock.
+
+        :param username: The username to check.
+        :param locked_info_function: The function to pull the locked
+            information associated with the username. This can be a
+            callable function or a string.
+
+            At a minimum, a callable function should take 'username' as
+            an argument, but can include other arguments as well.
+            A callable function should return a boolean value indicating
+            whether the account is locked.
+            True: account is locked.
+            False: account is not locked.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls the locked status from a BigQuery table.
+                    This pre-defined version will look for a table with
+                    three columns corresponding to username, locked_time
+                    and unlocked_time (see locked_info_args below for how
+                    to define there). If the account is locked, the latest
+                    locked_time will be more recent than the latest
+                    unlocked_time. Note that if using 'bigquery' here,
+                    in our _check_incorrect_attempts function, you should
+                    also be using the 'bigquery' option or using your own
+                    method that writes to a table set up in the same way.
+        :param locked_info_args: Arguments for the locked_info_function.
+            This should not include 'username' since that will
+            automatically be added here based on the user's input.
+
+            If using 'bigquery' as your locked_info_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            username_col (str): The name of the column in the BigQuery
+                table that contains the usernames.
+            locked_time_col (str): The name of the column in the BigQuery
+                table that contains the locked_times.
+            unlocked_time_col (str): The name of the column in the
+                BigQuery table that contains the unlocked_times.
+        :return: True if the account is LOCKED (or there is an error),
+            False if the account is UNLOCKED.
+        """
+        # first check the session state
+        if 'locked_accounts' in st.session_state.stauth and \
+                username in st.session_state.stauth['locked_accounts']:
+            return True
+
+        # if we have a locked_info_function, check that as well
+        if locked_info_function is not None:
+            # add the username to the arguments for the locked info function
+            locked_info_args = self._add_username_to_args(
+                username, locked_info_args)
+            if isinstance(locked_info_function, str):
+                if locked_info_function.lower() == 'bigquery':
+                    locked = self._bigquery_locked_info(locked_info_args)
+                else:
+                    eh.add_dev_error(
+                        'login',
+                        "The locked_info_function method is not recognized. "
+                        "The available options are: 'bigquery' or a callable "
+                        "function.")
+                    # this returns True even though the account is not
+                    # actually locked - the calling function should not
+                    # set the account as locked in the session state, it
+                    # should just set the authentication_status to False
+                    return True
+            else:
+                locked = locked_info_function(**locked_info_args)
+            if locked:
+                if 'locked_accounts' not in st.session_state.stauth:
+                    st.session_state.stauth['locked_accounts'] = []
+                st.session_state.stauth['locked_accounts'].append(username)
+                return True
+        return False
 
     def _password_pull_error_handler(self, indicator: str,
                                      value: str) -> bool:
         """ Records any errors from the password pulling process."""
-        if indicator == 'dev_errors':
+        if indicator == 'dev_error':
             eh.add_dev_error(
                 'login',
                 "There was an error checking the user's password. "
                 "Error: " + value)
             return False
-        elif indicator == 'user_errors':
+        elif indicator == 'user_error':
             eh.add_user_error(
                 'login',
                 "Incorrect username or password.")
@@ -716,50 +857,42 @@ class Authenticate(object):
                 "Incorrect username or password.")
             return False
 
-    def _check_username(self, username: str) -> bool:
-        """Check if the username is in the list of usernames."""
-        if username not in st.session_state[self.usernames_session_state]:
-            eh.add_user_error(
-                'login',
-                "Incorrect username or password.")
-            return False
-        return True
-
     def _check_pw(
             self,
             password: str,
             username: str,
             password_pull_function: Union[str, Callable],
-            password_pull_args: dict=None) -> bool:
+            password_pull_args: dict = None) -> bool:
         """
         Pulls the expected password and checks the validity of the entered
         password.
 
         :param password: The entered password.
         :param username: The entered username.
-        :param password_pull_function: The function to pull the password
-            associated with the username. This can be a callable function
-            or a string.
+        :param password_pull_function: The function to pull the hashed
+            password associated with the username. This can be a callable
+            function or a string.
 
             At a minimum, a callable function should take 'username' as
             an argument, but can include other arguments as well.
             A callable function should return:
              - A tuple of an indicator and a value
-             - The indicator should be either 'dev_errors', 'user_errors'
+             - The indicator should be either 'dev_error', 'user_error'
                 or 'success'.
              - The value should be a string that contains the error
-                message when the indicator is 'dev_errors', None when the
-                indicator is 'user_errors', and the hashed password when
-                the indicator is 'success'. It is None with 'user_errors'
+                message when the indicator is 'dev_error', None when the
+                indicator is 'user_error', and the hashed password when
+                the indicator is 'success'. It is None with 'user_error'
                 since we will handle that in the calling function and
-                create a user_errors that tells the user that
+                create a user_error that tells the user that
                 the username or password is incorrect.
 
             The current pre-defined function types are:
                 'bigquery': Pulls the password from a BigQuery table.
         :param password_pull_args: Arguments for the
             password_pull_function. This should not include 'username'
-            since that will be added here.
+            since that will automatically be added here based on the
+            user's input.
 
             If using 'bigquery' as your password_pull_function, the
             following arguments are required:
@@ -778,7 +911,7 @@ class Authenticate(object):
                 table that contains the passwords.
         """
         # add the username to the arguments for the password pull function
-        password_pull_args = self._add_username_to_password_pull_args(
+        password_pull_args = self._add_username_to_args(
             username, password_pull_args)
         # pull the password
         if isinstance(password_pull_function, str):
@@ -788,7 +921,7 @@ class Authenticate(object):
                     **password_pull_args)
             else:
                 indicator, value = (
-                    'dev_errors',
+                    'dev_error',
                     "The password_pull_function method is not recognized. "
                     "The available options are: 'bigquery' or a callable "
                     "function.")
@@ -810,7 +943,8 @@ class Authenticate(object):
             password_pull_function: Union[str, Callable],
             password_pull_args: dict = None) -> None:
         """
-        Checks the validity of the entered credentials.
+        Checks the validity of the entered credentials, including making
+        sure the number of incorrect attempts is not exceeded.
 
         :param username_text_key: The st.session_state name used to access
             the username.
@@ -830,13 +964,40 @@ class Authenticate(object):
         # and only continue if the username exists in our list and the
         # password matches the username
         if self._check_login_info(username, password) and \
-                self._check_username(username) and \
-                self._check_pw(password, username, password_pull_function,
+                self._check_username(username):
+            if self._check_locked_account(username, locked_info_function,
+                                          locked_info_args):
+                # here we have already set any errors in previous
+                # functions and added the username to the locked list,
+                # so just set authentication_status to false
+                st.session_state.stauth['authentication_status'] = False
+            else:
+                if self._check_pw(password, username, password_pull_function,
                                password_pull_args):
-            st.session_state.stauth['username'] = username
-            st.session_state.stauth['authentication_status'] = True
-            # get rid of any errors, since we have successfully logged in
-            eh.clear_errors()
+                    st.session_state.stauth['username'] = username
+                    st.session_state.stauth['authentication_status'] = True
+                    # ADD UNLOCKED TIME
+                    # get rid of any errors, since we have successfully
+                    # logged in
+                    eh.clear_errors()
+                else:
+                    st.session_state.stauth['authentication_status'] = False
+                    # ADD ATTEMPT
+                    # PULL ATTEMPTS
+                    # COUNT ATTEMPTS OVER LAST 24HRS AND AFTER LAST UNLOCK
+                    if incorrect_attempts >= 10:
+                        eh.add_user_error(
+                            'login',
+                            "Your account is locked. Please try again later.")
+                        # ADD LOCKED TIME
+                        if 'locked_accounts' not in st.session_state.stauth:
+                            st.session_state.stauth['locked_accounts'] = []
+                        st.session_state.stauth['locked_accounts'].append(
+                            username)
+                    else:
+                        eh.add_user_error(
+                            'login',
+                            "Incorrect username or password.")
         else:
             # here we have already set any errors in previous functions,
             # so just set authentication_status to false
@@ -854,7 +1015,7 @@ class Authenticate(object):
         Note that this method does not check for whether a user is already
         logged in, that should happen separately from this method, with
         this method one of the resulting options. For example:
-        if check_authentication_status(encrypt_type, encrypt_args):
+        if check_authentication_status():
             main()
         else:
             stauth.login()

@@ -116,8 +116,8 @@ class DBTools(object):
         :param username: The username to pull the password for.
         :param password_col: The column that holds the password.
         :return: A tuple with an indicator labeling the result as either
-            'success' or 'error', and the password if successful or the
-            error message if not.
+            'success' or 'error', and the hashed password if successful or
+            the error message if not.
         """
         # connect to the database
         scope = ['https://www.googleapis.com/auth/bigquery']
@@ -125,12 +125,12 @@ class DBTools(object):
             creds = service_account.Credentials.from_service_account_info(
                 bq_creds, scopes=scope)
         except Exception as e:
-            return ('dev_errors', f"Error loading credentials: {str(e)}")
+            return ('dev_error', f"Error loading credentials: {str(e)}")
 
         try:
             client = bigquery.Client(credentials=creds)
         except Exception as e:
-            return ('dev_errors',
+            return ('dev_error',
                     f"Error creating the BigQuery client: {str(e)}")
 
         # create the query
@@ -143,7 +143,7 @@ class DBTools(object):
             query_job = client.query(sql_statement)
             query_job.result()
         except Exception as e:
-            return ('dev_errors', f"Error retrieving BigQuery data: {str(e)}")
+            return ('dev_error', f"Error retrieving BigQuery data: {str(e)}")
 
         # create the df pull the first value
         df = query_job.to_dataframe()
@@ -154,7 +154,7 @@ class DBTools(object):
             # calling function - it should combine the lack of password
             # with the potential for an incorrect username and display
             # something like "Incorrect username or password."
-            return ('user_errors', None)
+            return ('user_error', None)
 
         return ('success', password)
 
@@ -219,3 +219,78 @@ class DBTools(object):
             return ('user_errors', None)
 
         return ('success', data)
+
+    def pull_locked_info_bigquery(
+            self,
+            bq_creds: dict,
+            project: str,
+            dataset: str,
+            table_name: str,
+            username_col: str,
+            username: str,
+            locked_time_col: str,
+            unlocked_time_col: str) -> Tuple[str, Union[str, tuple]]:
+        """
+        Pull the latest locked_time and unlocked_time for a username from
+        BigQuery.
+
+        :param bq_creds: The credentials to access the BigQuery project.
+            These should, at a minimum, have the roles of "BigQuery Data
+            Editor", "BigQuery Read Session User" and "BigQuery Job User".
+        :param project: The project to pull the data from.
+        :param dataset: The dataset to pull the data from.
+        :param table_name: The table to pull the data from.
+        :param username_col: The column that holds the username.
+        :param username: The username to pull the password for.
+        :param locked_time_col: The column that holds the locked_times.
+        :param unlocked_time_col: The column that holds the
+            unlocked_times.
+        :return: A tuple with an indicator labeling the result as either
+            'success' or 'error', and the hashed password if successful or
+            the error message if not.
+        """
+        # connect to the database
+        scope = ['https://www.googleapis.com/auth/bigquery']
+        try:
+            creds = service_account.Credentials.from_service_account_info(
+                bq_creds, scopes=scope)
+        except Exception as e:
+            return ('dev_error', f"Error loading credentials: {str(e)}")
+
+        try:
+            client = bigquery.Client(credentials=creds)
+        except Exception as e:
+            return ('dev_error',
+                    f"Error creating the BigQuery client: {str(e)}")
+
+        table_id = project + "." + dataset + "." + table_name
+
+        # create and run the query
+        sql_statement = (
+            f"SELECT {locked_time_col}, {unlocked_time_col} FROM {table_id} "
+            f"WHERE {username_col} = '{username}'"
+            f"ORDER BY {locked_time_col} DESC, {unlocked_time_col} DESC")
+        try:
+            query_job = client.query(sql_statement)
+            query_job.result()
+        except Exception as e:
+            return ('dev_error', f"Error retrieving BigQuery data: {str(e)}")
+
+        # create the df pull the first values
+        df = query_job.to_dataframe()
+        try:
+            # sort the locked_time_col column of df
+            df.sort_values(by=locked_time_col, ascending=False, inplace=True)
+            # the latest_lock should be the most recent locked_time
+            latest_lock = df.iloc[0, 0]
+        except Exception as e:
+            latest_lock = None
+        try:
+            # sort the unlocked_time_col column of df
+            df.sort_values(by=unlocked_time_col, ascending=False, inplace=True)
+            # the latest_unlock should be the most recent unlocked_time
+            latest_unlock = df.iloc[0, 1]
+        except Exception as e:
+            latest_unlock = None
+
+        return ('success', (latest_lock, latest_unlock))
