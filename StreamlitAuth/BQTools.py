@@ -6,14 +6,69 @@ from google.oauth2 import service_account
 from typing import Tuple, Union
 
 
-class DBTools(object):
+class BQTools(object):
     """
-    Interact with databases, such as saving and pulling data.
+    Interact with BigQuery, such as saving and pulling data.
     """
     def __init__(self) -> None:
         pass
 
-    def store_user_credentials_bigquery(
+    def _setup_connection(self, bq_creds: dict) -> Union[bigquery.Client, str]:
+        """Set up a connection to the bigquery database."""
+        scope = ['https://www.googleapis.com/auth/bigquery']
+        try:
+            creds = service_account.Credentials.from_service_account_info(
+                bq_creds, scopes=scope)
+        except Exception as e:
+            return f"Error loading credentials: {str(e)}"
+        try:
+            client = bigquery.Client(credentials=creds)
+        except Exception as e:
+            return f"Error creating the BigQuery client: {str(e)}"
+        return client
+
+    def _setup_job_config(self, if_exists: str) -> bigquery.LoadJobConfig:
+        # determine behavior if table already exists
+        if if_exists == 'append':
+            write_disposition = 'WRITE_APPEND'
+        elif if_exists == 'replace':
+            write_disposition = 'WRITE_TRUNCATE'
+        else:
+            write_disposition = 'WRITE_EMPTY'
+        # set up the config
+        job_config = bigquery.LoadJobConfig(
+            write_disposition=write_disposition
+        )
+        return job_config
+
+    def _store_df(self, df: pd.DataFrame, table_id: str,
+                  job_config: bigquery.LoadJobConfig) -> Union[None, str]:
+        try:
+            job = client.load_table_from_dataframe(df, table_id,
+                                                   job_config=job_config)
+            job.result()
+        except Exception as e:
+            return f"Error storing BigQuery data: {str(e)}"
+
+    def _test_data_stored(self, client: bigquery.Client,
+                          table_id: str) -> Union[None, str]:
+        """Test if we can access the table / double check that it
+            saved."""
+        try:
+            _ = client.get_table(table_id)  # Make an API request.
+        except Exception as e:
+            return f"Error getting the saved table from BigQuery: {str(e)}"
+
+    def _run_query(self, client: bigquery.Client,
+                   sql_statement: str) -> Union[bigquery.QueryJob, tuple]:
+        try:
+            query_job = client.query(sql_statement)
+            query_job.result()
+            return query_job
+        except Exception as e:
+            return ('dev_error', f"Error retrieving BigQuery data: {str(e)}")
+
+    def store_user_credentials(
             self,
             user_credentials: dict,
             bq_creds: dict,
@@ -54,45 +109,26 @@ class DBTools(object):
         df = pd.DataFrame(user_credentials)
 
         # connect to the database
-        scope = ['https://www.googleapis.com/auth/bigquery']
-        try:
-            creds = service_account.Credentials.from_service_account_info(
-                bq_creds, scopes=scope)
-        except Exception as e:
-            return f"Error loading credentials: {str(e)}"
-
-        try:
-            client = bigquery.Client(credentials=creds)
-        except Exception as e:
-            return f"Error creating the BigQuery client: {str(e)}"
+        client = self._setup_connection(bq_creds)
+        if isinstance(client, str):
+            # in this case the "client" is an error message
+            return client
 
         # set up table_id
         table_id = project + "." + dataset + "." + table_name
-        # determine behavior if table already exists
-        if if_exists == 'append':
-            write_disposition = 'WRITE_APPEND'
-        elif if_exists == 'replace':
-            write_disposition = 'WRITE_TRUNCATE'
-        else:
-            write_disposition = 'WRITE_EMPTY'
-        # set up the config
-        job_config = bigquery.LoadJobConfig(
-            write_disposition=write_disposition
-        )
+
+        # set up job_config
+        job_config = self._setup_job_config(if_exists)
 
         # store
-        try:
-            job = client.load_table_from_dataframe(df, table_id,
-                                                   job_config=job_config)
-            job.result()
-        except Exception as e:
-            return f"Error storing BigQuery data: {str(e)}"
+        job_result = self._store_df(df, table_id, job_config)
+        if isinstance(job_result, str):
+            return job_result
 
         # test if we can access the table / double check that it saved
-        try:
-            _ = client.get_table(table_id)  # Make an API request.
-        except Exception as e:
-            return f"Error getting the saved table from BigQuery: {str(e)}"
+        stored_result = self._test_data_stored(client, table_id)
+        if isinstance(stored_result, str):
+            return stored_result
 
     def pull_password_bigquery(
             self,
@@ -120,18 +156,10 @@ class DBTools(object):
             the error message if not.
         """
         # connect to the database
-        scope = ['https://www.googleapis.com/auth/bigquery']
-        try:
-            creds = service_account.Credentials.from_service_account_info(
-                bq_creds, scopes=scope)
-        except Exception as e:
-            return ('dev_error', f"Error loading credentials: {str(e)}")
-
-        try:
-            client = bigquery.Client(credentials=creds)
-        except Exception as e:
-            return ('dev_error',
-                    f"Error creating the BigQuery client: {str(e)}")
+        client = self._setup_connection(bq_creds)
+        if isinstance(client, str):
+            # in this case the "client" is an error message
+            return ('dev_error', client)
 
         # create the query
         table_id = project + "." + dataset + "." + table_name
@@ -139,14 +167,12 @@ class DBTools(object):
                          f"WHERE {username_col} = '{username}'")
 
         # run the query
-        try:
-            query_job = client.query(sql_statement)
-            query_job.result()
-        except Exception as e:
-            return ('dev_error', f"Error retrieving BigQuery data: {str(e)}")
+        query_result = self._run_query(client, sql_statement)
+        if isinstance(query_result, tuple):
+            return query_result
 
         # create the df pull the first value
-        df = query_job.to_dataframe()
+        df = query_result.to_dataframe()
         try:
             password = df.iloc[0, 0]
         except Exception as e:
@@ -183,32 +209,22 @@ class DBTools(object):
             error message if not.
         """
         # connect to the database
-        scope = ['https://www.googleapis.com/auth/bigquery']
-        try:
-            creds = service_account.Credentials.from_service_account_info(
-                bq_creds, scopes=scope)
-        except Exception as e:
-            return ('dev_errors', f"Error loading credentials: {str(e)}")
-
-        try:
-            client = bigquery.Client(credentials=creds)
-        except Exception as e:
-            return ('dev_errors',
-                    f"Error creating the BigQuery client: {str(e)}")
+        client = self._setup_connection(bq_creds)
+        if isinstance(client, str):
+            # in this case the "client" is an error message
+            return ('dev_error', client)
 
         # create the query
         table_id = project + "." + dataset + "." + table_name
         sql_statement = f"SELECT {target_col} FROM {table_id}"
 
         # run the query
-        try:
-            query_job = client.query(sql_statement)
-            query_job.result()
-        except Exception as e:
-            return ('dev_errors', f"Error retrieving BigQuery data: {str(e)}")
+        query_result = self._run_query(client, sql_statement)
+        if isinstance(query_result, tuple):
+            return query_result
 
         # create the df
-        df = query_job.to_dataframe()
+        df = query_result.to_dataframe()
         try:
             data = df.iloc[:, 0]
         except Exception as e:
@@ -250,18 +266,10 @@ class DBTools(object):
             the error message if not.
         """
         # connect to the database
-        scope = ['https://www.googleapis.com/auth/bigquery']
-        try:
-            creds = service_account.Credentials.from_service_account_info(
-                bq_creds, scopes=scope)
-        except Exception as e:
-            return ('dev_error', f"Error loading credentials: {str(e)}")
-
-        try:
-            client = bigquery.Client(credentials=creds)
-        except Exception as e:
-            return ('dev_error',
-                    f"Error creating the BigQuery client: {str(e)}")
+        client = self._setup_connection(bq_creds)
+        if isinstance(client, str):
+            # in this case the "client" is an error message
+            return ('dev_error', client)
 
         table_id = project + "." + dataset + "." + table_name
 
@@ -270,14 +278,13 @@ class DBTools(object):
             f"SELECT {locked_time_col}, {unlocked_time_col} FROM {table_id} "
             f"WHERE {username_col} = '{username}'"
             f"ORDER BY {locked_time_col} DESC, {unlocked_time_col} DESC")
-        try:
-            query_job = client.query(sql_statement)
-            query_job.result()
-        except Exception as e:
-            return ('dev_error', f"Error retrieving BigQuery data: {str(e)}")
+        # run the query
+        query_result = self._run_query(client, sql_statement)
+        if isinstance(query_result, tuple):
+            return query_result
 
         # create the df pull the first values
-        df = query_job.to_dataframe()
+        df = query_result.to_dataframe()
         try:
             # sort the locked_time_col column of df
             df.sort_values(by=locked_time_col, ascending=False, inplace=True)
@@ -341,42 +348,75 @@ class DBTools(object):
         df = pd.DataFrame(store_info)
 
         # connect to the database
-        scope = ['https://www.googleapis.com/auth/bigquery']
-        try:
-            creds = service_account.Credentials.from_service_account_info(
-                bq_creds, scopes=scope)
-        except Exception as e:
-            return f"Error loading credentials: {str(e)}"
-
-        try:
-            client = bigquery.Client(credentials=creds)
-        except Exception as e:
-            return f"Error creating the BigQuery client: {str(e)}"
+        client = self._setup_connection(bq_creds)
+        if isinstance(client, str):
+            # in this case the "client" is an error message
+            return client
 
         # set up table_id
         table_id = project + "." + dataset + "." + table_name
-        # determine behavior if table already exists
-        if if_exists == 'append':
-            write_disposition = 'WRITE_APPEND'
-        elif if_exists == 'replace':
-            write_disposition = 'WRITE_TRUNCATE'
-        else:
-            write_disposition = 'WRITE_EMPTY'
-        # set up the config
-        job_config = bigquery.LoadJobConfig(
-            write_disposition=write_disposition
-        )
+
+        job_config = self._setup_job_config(if_exists)
 
         # store
-        try:
-            job = client.load_table_from_dataframe(df, table_id,
-                                                   job_config=job_config)
-            job.result()
-        except Exception as e:
-            return f"Error storing BigQuery data: {str(e)}"
+        job_result = self._store_df(df, table_id, job_config)
+        if isinstance(job_result, str):
+            return job_result
 
         # test if we can access the table / double check that it saved
-        try:
-            _ = client.get_table(table_id)  # Make an API request.
-        except Exception as e:
-            return f"Error getting the saved table from BigQuery: {str(e)}"
+        stored_result = self._test_data_stored(client, table_id)
+        if isinstance(stored_result, str):
+            return stored_result
+
+    def store_incorrect_login_times(
+            self,
+            username: str,
+            username_col: str,
+            datetime_col: str,
+            bq_creds: dict,
+            project: str,
+            dataset: str,
+            table_name: str,
+            if_exists: str = 'append') -> Union[None, str]:
+        """
+        Stores a username and datetime associated with a failed login to
+        Google BigQuery.
+
+        :param username: The username to store.
+        :param username_col: The column that holds the username.
+        :param datetime_col: The column that holds the datetime.
+        :param bq_creds: The credentials to access the BigQuery project.
+            These should, at a minimum, have the roles of "BigQuery Data
+            Editor", "BigQuery Read Session User" and "BigQuery Job User".
+        :param project: The project to store the data in.
+        :param dataset: The dataset to store the data in.
+        :param table_name: The name of the table to store the data in.
+        :param if_exists: What to do if the table already exists.
+            Can be 'append', 'replace', or 'fail'. Default is 'append'.
+        :return: None if successful, error message if not.
+        """
+        # turn the username and datetime into a dataframe
+        store_info = {username_col: [username],
+                      datetime_col: [pd.to_datetime('now', utc=True)]}
+        df = pd.DataFrame(store_info)
+
+        # connect to the database
+        client = self._setup_connection(bq_creds)
+        if isinstance(client, str):
+            # in this case the "client" is an error message
+            return client
+
+        # set up table_id
+        table_id = project + "." + dataset + "." + table_name
+
+        job_config = self._setup_job_config(if_exists)
+
+        # store
+        job_result = self._store_df(df, table_id, job_config)
+        if isinstance(job_result, str):
+            return job_result
+
+        # test if we can access the table / double check that it saved
+        stored_result = self._test_data_stored(client, table_id)
+        if isinstance(stored_result, str):
+            return stored_result

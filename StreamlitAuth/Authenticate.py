@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Callable, Tuple, Union
 
 from StreamlitAuth import ErrorHandling as eh
-from StreamlitAuth.DBTools import DBTools
+from StreamlitAuth.BQTools import BQTools
 from StreamlitAuth.Email import Email
 from StreamlitAuth.Encryptor import GenericEncryptor, GoogleEncryptor
 from StreamlitAuth.Hasher import Hasher
@@ -238,8 +238,8 @@ class Authenticate(object):
             cred_save_args)
         if isinstance(cred_save_function, str):
             if cred_save_function.lower() == 'bigquery':
-                db = DBTools()
-                error = db.store_user_credentials_bigquery(**cred_save_args)
+                db = BQTools()
+                error = db.store_user_credentials(**cred_save_args)
             else:
                 error = ("The cred_save_function method is not recognized. "
                          "The available options are: 'bigquery' or a "
@@ -703,7 +703,7 @@ class Authenticate(object):
         :return: True if the account is locked, False if the account is
             unlocked.
         """
-        db = DBTools()
+        db = BQTools()
         indicator, value = db.pull_locked_info_bigquery(**locked_info_args)
 
         # we only have dev_error's in this case, no user_error's
@@ -937,7 +937,7 @@ class Authenticate(object):
         # pull the password
         if isinstance(password_pull_function, str):
             if password_pull_function.lower() == 'bigquery':
-                db = DBTools()
+                db = BQTools()
                 indicator, value = db.pull_password_bigquery(
                     **password_pull_args)
             else:
@@ -957,26 +957,62 @@ class Authenticate(object):
             return self._password_verification_error_handler(verified)
         return False
 
-    def _store_unlocked_time(
+    def _store_lock_unlock_time(
             self,
             username: str,
-            store_unlocked_time_function: Union[str, Callable],
-            store_unlocked_time_args: dict) -> Union[None, str]:
-        """Store the unlocked time associated with the username."""
-        store_unlocked_time_args = self._add_username_to_args(
-            username, store_unlocked_time_args)
-        if isinstance(store_unlocked_time_function, str):
-            if store_unlocked_time_function.lower() == 'bigquery':
-                store_unlocked_time_args['lock_or_unlock'] = 'unlock'
-                db = DBTools()
-                error = db.store_lock_unlock_times(**store_unlocked_time_args)
+            store_function: Union[str, Callable],
+            store_args: dict,
+            lock_or_unlock: str) -> Union[None, str]:
+        """
+        Store the locked or unlocked time associated with the username.
+
+        :param username: The username to store the lock or unlock time
+            for.
+        :param store_function: The function to store the locked or
+            unlocked time associated with the username. This can be a
+            callable function or a string.
+
+            At a minimum, a callable function should take 'username' as
+            an argument, but can include other arguments as well.
+            A callable function should return an error message as a
+            string.
+
+            The current pre-defined function types are:
+                'bigquery': Stores the locked or unlocked time in a
+                    BigQuery table.
+        :param store_args: Arguments for the store_function. This should
+            not include 'username' since that will automatically be added
+            here based on the user's input.
+
+            If using 'bigquery' as your store_function, the following
+            arguments are required:
+            username_col (str): The column to save the username to.
+            locked_time_col (str): The column to save the locked time to.
+            unlocked_time_col (str): The column to save the unlocked time
+                to.
+            lock_or_unlock (str): The string 'lock' or 'unlock' to
+                indicate whether the time is a lock or unlock time.
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+        """
+        store_args = self._add_username_to_args(username, store_args)
+        if isinstance(store_function, str):
+            if store_function.lower() == 'bigquery':
+                store_args['lock_or_unlock'] = lock_or_unlock
+                db = BQTools()
+                error = db.store_lock_unlock_times(**store_args)
             else:
-                error = ("The store_unlocked_time_function method is not"
-                         "recognized. The available options are: 'bigquery' "
-                         "or a callable function.")
+                error = ("The store_function method is not recognized. The "
+                         "available options are: 'bigquery' or a callable "
+                         "function.")
         else:
-            error = store_unlocked_time_function(
-                username, **store_unlocked_time_args)
+            error = store_function(**store_args)
         return error
 
     def _unlock_time_save_error_handler(self, error: str) -> bool:
@@ -1000,15 +1036,115 @@ class Authenticate(object):
         Attempts to store the unlock time, deals with any errors and
         updates the session_state as necessary.
         """
-        error = self._store_unlocked_time(username,
-                                          store_unlocked_time_function,
-                                          store_unlocked_time_args)
-        if self._unlock_time_save_error_handler(error):
-            st.session_state.stauth['username'] = username
-            st.session_state.stauth['authentication_status'] = True
-            eh.clear_errors()
+        error = self._store_lock_unlock_time(
+            username, store_unlocked_time_function,
+            store_unlocked_time_args, 'unlock')
+        self._unlock_time_save_error_handler(error)
+
+    def _lock_time_save_error_handler(self, error: str) -> None:
+        """
+        Records any errors from the lock time saving process.
+        """
+        if error is not None:
+            eh.add_dev_error(
+                'login',
+                "There was an error saving the lock time. "
+                "Error: " + error)
+
+    def _store_lock_time_handler(
+            self,
+            username: str,
+            store_locked_time_function: Union[str, Callable],
+            store_locked_time_args: dict) -> None:
+        """
+        Attempts to store the lock time, deals with any errors and
+        updates the session_state as necessary.
+        """
+        error = self._store_lock_unlock_time(
+            username, store_locked_time_function, store_locked_time_args,
+            'lock')
+        self._lock_time_save_error_handler(error)
+
+    def _store_incorrect_attempt(
+            self,
+            username: str,
+            store_incorrect_attempts_function: Union[str, Callable],
+            store_incorrect_attempts_args: dict) -> Union[None, str]:
+        """
+        Store the datetime associated with the username for an incorrect
+        login attempt.
+
+        :param username: The username to store the lock or unlock time
+            for.
+        :param store_incorrect_attempts_function: The function to store
+            the datetime and username. This can be a callable function or
+            a string. At a minimum, a callable function should take
+            'username' as an argument, but can include other arguments as
+            well. A callable function should return an error message as a
+            string.
+
+            The current pre-defined function types are:
+                'bigquery': Stores the info in a BigQuery table.
+        :param store_incorrect_attempts_args: Arguments for the
+            store_function. This should not include 'username' since that
+            will automatically be added here based on the user's input.
+
+            If using 'bigquery' as your store_function, the following
+            arguments are required:
+            username_col (str): The column to save the username to.
+            datetime_col (str): The column to save the datetime to.
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+        """
+        store_incorrect_attempts_args = self._add_username_to_args(
+            username, store_incorrect_attempts_args)
+        if isinstance(store_incorrect_attempts_function, str):
+            if store_function.lower() == 'bigquery':
+                db = BQTools()
+                error = db.store_incorrect_login_times(
+                    **store_incorrect_attempts_args)
+            else:
+                error = ("The store_incorrect_attempts_function method is not "
+                         "recognized. The available options are: 'bigquery' "
+                         "or a callable function.")
         else:
-            st.session_state.stauth['authentication_status'] = False
+            error = store_incorrect_attempts_function(
+                **store_incorrect_attempts_args)
+        return error
+
+    def _incorrect_attempts_error_handler(self, error: str) -> None:
+        """
+        Records any errors from the incorrect attempt saving process.
+        """
+        if error is not None:
+            eh.add_dev_error(
+                'login',
+                "There was an error saving the incorrect attempt time. "
+                "Error: " + error)
+            return False
+        return True
+
+    def _store_incorrect_attempts_handler(
+            self,
+            username: str,
+            store_incorrect_attempts_function: Union[str, Callable],
+            store_incorrect_attempts_args: dict) -> bool:
+        """
+        Attempts to store the incorrect attempt time and username, deals
+        with any errors and updates the session_state as necessary.
+
+        :return: False if any errors, True if no errors.
+        """
+        error = self._store_incorrect_attempt(
+            username, store_incorrect_attempts_function,
+            store_incorrect_attempts_args)
+        return self._incorrect_attempts_error_handler(error)
 
     def _check_credentials(
             self,
@@ -1024,8 +1160,6 @@ class Authenticate(object):
             store_locked_time_args: dict = None,
             store_unlocked_time_function: Union[str, Callable] = None,
             store_unlocked_time_args: dict = None,
-            pull_locked_unlock_times_function: Union[str, Callable] = None,
-            pull_locked_unlock_times_args: dict = None,
             store_incorrect_attempts_function: Union[str, Callable] = None,
             store_incorrect_attempts_args: dict = None,
             pull_incorrect_attempts_function: Union[str, Callable] = None,
@@ -1082,13 +1216,6 @@ class Authenticate(object):
         :param store_unlocked_time_args: Arguments for the
             store_unlocked_times_function. See the docstring for
             _store_unlocked_times for more information.
-        :param pull_locked_unlock_times_function: The function to pull the
-            locked and unlocked times associated with the username. This
-            can be a callable function or a string. See the docstring for
-            _pull_locked_unlock_times for more information.
-        :param pull_locked_unlock_times_args: Arguments for the
-            pull_locked_unlock_times_function. See the docstring for
-            _pull_locked_unlock_times for more information.
         :param store_incorrect_attempts_function: The function to store
             the incorrect attempts associated with the username. This can
             be a callable function or a string. See the docstring for
@@ -1122,26 +1249,33 @@ class Authenticate(object):
                 # only continue if the password is correct
                 if self._check_pw(password, username, password_pull_function,
                                password_pull_args):
+                    # note that even with errors storing the data, we
+                    # still let the user login, so we clear the errors
+                    # first, so that we can record any storage errors and
+                    # have them accessible later on
+                    eh.clear_errors()
                     # if we have a store_unlocked_time_function, store the
                     # unlocked time
                     if store_unlocked_time_function is not None:
                         self._store_unlock_time_handler(
                             username, store_unlocked_time_function,
                             store_unlocked_time_args)
-                    else:
-                        st.session_state.stauth['username'] = username
-                        st.session_state.stauth['authentication_status'] = True
-                        eh.clear_errors()
+                    st.session_state.stauth['username'] = username
+                    st.session_state.stauth['authentication_status'] = True
                 else:
                     st.session_state.stauth['authentication_status'] = False
-                    # ADD ATTEMPT
+                    self._store_incorrect_attempts_handler(
+                        username, store_incorrect_attempts_function,
+                        store_incorrect_attempts_args)
                     # PULL ATTEMPTS
                     # COUNT ATTEMPTS OVER LAST 24HRS AND AFTER LAST UNLOCK
                     if incorrect_attempts >= 10:
                         eh.add_user_error(
                             'login',
                             "Your account is locked. Please try again later.")
-                        # ADD LOCKED TIME - SEE UNLOCKED TIME PATTERN ABOVE
+                        self._store_lock_time_handler(
+                            username, store_locked_time_function,
+                            store_locked_time_args)
                         if 'locked_accounts' not in st.session_state.stauth:
                             st.session_state.stauth['locked_accounts'] = []
                         st.session_state.stauth['locked_accounts'].append(
