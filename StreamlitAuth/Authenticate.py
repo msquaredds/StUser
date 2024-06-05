@@ -938,7 +938,7 @@ class Authenticate(object):
         if isinstance(password_pull_function, str):
             if password_pull_function.lower() == 'bigquery':
                 db = BQTools()
-                indicator, value = db.pull_password_bigquery(
+                indicator, value = db.pull_password(
                     **password_pull_args)
             else:
                 indicator, value = (
@@ -1146,6 +1146,87 @@ class Authenticate(object):
             store_incorrect_attempts_args)
         return self._incorrect_attempts_error_handler(error)
 
+    def _incorrect_attempts_pull_error_handler(self, indicator: str,
+                                               value: str) -> bool:
+        """ Records any errors from the incorrect attempts pulling
+            process."""
+        if indicator == 'dev_error':
+            eh.add_dev_error(
+                'login',
+                "There was an error pulling incorrect login attempts. "
+                "Error: " + value)
+            return False
+        return True
+
+    def _pull_incorrect_attempts(
+            self,
+            username: str,
+            pull_incorrect_attempts_function: Union[str, Callable] = None,
+            pull_incorrect_attempts_args: dict = None) -> bool:
+        """
+        Pull incorrect login attempts for a given username.
+
+        :param username: The username to check.
+        :param pull_incorrect_attempts_function: The function to pull the
+            locked information associated with the username. This can be a
+            callable function or a string.
+
+            At a minimum, a callable function should take 'username' as
+            one of the pull_incorrect_attempts_args, but can include other
+            arguments as well.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls the incorrect attempts datetimes from a
+                    BigQuery table.
+        :param pull_incorrect_attempts_args: Arguments for the
+            pull_incorrect_attempts_function.
+            This should not include 'username' since that will
+            automatically be added here. Instead, it should include things
+            like database name, table name, credentials to log into the
+            database, etc.
+
+            If using 'bigquery' as your pull_incorrect_attempts_function,
+            the following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            username_col (str): The name of the column in the BigQuery
+                table that contains the usernames.
+            datetime_col (str): The name of the column in the BigQuery
+                table that contains the datetimes for incorrect attempts.
+        :return: True if the account is LOCKED (or there is an error),
+            False if the account is UNLOCKED.
+        """
+        # add the username to the arguments
+        pull_incorrect_attempts_args = self._add_username_to_args(
+            username, pull_incorrect_attempts_args)
+        if isinstance(pull_incorrect_attempts_function, str):
+            if pull_incorrect_attempts_function.lower() == 'bigquery':
+                db = BQTools()
+                indicator, value = db.pull_password(
+                    **pull_incorrect_attempts_args)
+            else:
+                indicator, value = (
+                    'dev_error',
+                    "The pull_incorrect_attempts_function method is not "
+                    "recognized. The available options are: 'bigquery' or a "
+                    "callable function.")
+        else:
+            indicator, value = pull_incorrect_attempts_function(
+                **pull_incorrect_attempts_args)
+
+        ######################################
+        # NEED TO RETURN THE ACTUAL DATETIMES HERE TOO
+        ######################################
+
+        return self._incorrect_attempts_pull_error_handler(indicator, value)
+
     def _check_credentials(
             self,
             username_text_key: str,
@@ -1264,11 +1345,15 @@ class Authenticate(object):
                     st.session_state.stauth['authentication_status'] = True
                 else:
                     st.session_state.stauth['authentication_status'] = False
-                    self._store_incorrect_attempts_handler(
+                    store_result = self._store_incorrect_attempts_handler(
                         username, store_incorrect_attempts_function,
                         store_incorrect_attempts_args)
-                    # PULL ATTEMPTS
+                    pull_result = self._pull_incorrect_attempts(
+                        username, pull_incorrect_attempts_function,
+                        pull_incorrect_attempts_args)
+
                     # COUNT ATTEMPTS OVER LAST 24HRS AND AFTER LAST UNLOCK
+
                     if incorrect_attempts >= 10:
                         eh.add_user_error(
                             'login',

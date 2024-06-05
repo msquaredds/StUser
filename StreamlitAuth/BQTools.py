@@ -130,7 +130,7 @@ class BQTools(object):
         if isinstance(stored_result, str):
             return stored_result
 
-    def pull_password_bigquery(
+    def pull_password(
             self,
             bq_creds: dict,
             project: str,
@@ -148,9 +148,9 @@ class BQTools(object):
         :param project: The project to pull the data from.
         :param dataset: The dataset to pull the data from.
         :param table_name: The table to pull the data from.
-        :param username_col: The column that holds the username.
-        :param username: The username to pull the password for.
-        :param password_col: The column that holds the password.
+        :param username_col: The column that holds the usernames.
+        :param username: The username to match.
+        :param password_col: The column that holds the passwords to pull.
         :return: A tuple with an indicator labeling the result as either
             'success' or 'error', and the hashed password if successful or
             the error message if not.
@@ -420,3 +420,55 @@ class BQTools(object):
         stored_result = self._test_data_stored(client, table_id)
         if isinstance(stored_result, str):
             return stored_result
+
+    def pull_incorrect_attempts(
+            self,
+            bq_creds: dict,
+            project: str,
+            dataset: str,
+            table_name: str,
+            username_col: str,
+            username: str,
+            datetime_col: str) -> Tuple[str, Union[pd.Seriers, None, str]]:
+        """
+        Pull a datetimes associated with an incorrect login for a username
+        from BigQuery.
+
+        :param bq_creds: The credentials to access the BigQuery project.
+            These should, at a minimum, have the roles of "BigQuery Data
+            Editor", "BigQuery Read Session User" and "BigQuery Job User".
+        :param project: The project to pull the data from.
+        :param dataset: The dataset to pull the data from.
+        :param table_name: The table to pull the data from.
+        :param username_col: The column that holds the usernames.
+        :param username: The username to match.
+        :param datetime_col: The column that holds the datetimes to pull.
+        :return: A tuple with an indicator labeling the result as either
+            'success' or 'error', and the hashed password if successful or
+            the error message if not.
+        """
+        # connect to the database
+        client = self._setup_connection(bq_creds)
+        if isinstance(client, str):
+            # in this case the "client" is an error message
+            return ('dev_error', client)
+
+        # create the query
+        table_id = project + "." + dataset + "." + table_name
+        sql_statement = (f"SELECT {datetime_col} FROM {table_id} "
+                         f"WHERE {username_col} = '{username}'")
+
+        # run the query
+        query_result = self._run_query(client, sql_statement)
+        if isinstance(query_result, tuple):
+            return query_result
+
+        # create the df and then get the series with the datetime
+        df = query_result.to_dataframe()
+        # if data_series is empty, we return None
+        if df.empty:
+            data_series = None
+        else:
+            data_series = df[datetime_col]
+
+        return ('success', data_series)
