@@ -689,11 +689,14 @@ class Authenticate(object):
         existing_args['username'] = username
         return existing_args
 
-    def _bigquery_locked_info(self, locked_info_args: dict) -> bool:
+    def _bigquery_locked_info(self, locked_hours: int,
+                              locked_info_args: dict) -> bool:
         """
         Pull the locked information from BigQuery and check whether the
         account has been locked more recently than unlocked.
 
+        :param locked_hours: The number of hours that the account should
+            be locked for after a certain number of failed login attempts.
         :param locked_info_args: The arguments for the
             locked_info_function. See the docstring for
             _check_locked_account for more information.
@@ -713,13 +716,16 @@ class Authenticate(object):
 
         # if no errors, pull out the latest lock and unlock times
         latest_lock, latest_unlock = value
+        # find the time that was locked_hours ago
+        locked_time = datetime.utcnow() - timedelta(hours=locked_hours)
         # we are locked if the times both exist and the latest lock is
         # more recent, or if the latest lock exists and the latest unlock
         # does not
         if ((latest_lock is not None and latest_unlock is not None
-                and latest_lock > latest_unlock)
+                and latest_lock > latest_unlock and latest_lock > locked_time)
                 or
-                (latest_lock is not None and latest_unlock is None)):
+                (latest_lock is not None and latest_unlock is None
+                 and latest_lock > locked_time)):
             eh.add_user_error(
                 'login',
                 "Your account is locked. Please try again later.")
@@ -730,7 +736,8 @@ class Authenticate(object):
             self,
             username: str,
             locked_info_function: Union[str, Callable] = None,
-            locked_info_args: dict = None) -> bool:
+            locked_info_args: dict = None,
+            locked_hours: int = 24) -> bool:
         """
         Check if we have a locked account for the given username.
 
@@ -746,8 +753,16 @@ class Authenticate(object):
             information associated with the username. This can be a
             callable function or a string.
 
+            The function should pull in two arguments: locked_info_args
+            and locked_hours. The locked_info_args can be used for things
+            like accessing and pulling from a database. The locked_hours
+            is the number of hours that the account should be locked for
+            after a certain number of failed login attempts.
+
             At a minimum, a callable function should take 'username' as
-            an argument, but can include other arguments as well.
+            one of the locked_info_args, but can include other arguments
+            as well.
+
             A callable function should return a boolean value indicating
             whether the account is locked.
             True: account is locked.
@@ -761,12 +776,14 @@ class Authenticate(object):
                     to define there). If the account is locked, the latest
                     locked_time will be more recent than the latest
                     unlocked_time. Note that if using 'bigquery' here,
-                    in our _check_incorrect_attempts function, you should
+                    in our other database functions, you should
                     also be using the 'bigquery' option or using your own
                     method that writes to a table set up in the same way.
         :param locked_info_args: Arguments for the locked_info_function.
             This should not include 'username' since that will
-            automatically be added here based on the user's input.
+            automatically be added here. Instead, it should include things
+            like database name, table name, credentials to log into the
+            database, etc.
 
             If using 'bigquery' as your locked_info_function, the
             following arguments are required:
@@ -785,6 +802,9 @@ class Authenticate(object):
                 table that contains the locked_times.
             unlocked_time_col (str): The name of the column in the
                 BigQuery table that contains the unlocked_times.
+        :param locked_hours: The number of hours that the account should
+            be locked for after a certain number of failed login attempts.
+            The desired number of incorrect attempts is set elsewhere.
         :return: True if the account is LOCKED (or there is an error),
             False if the account is UNLOCKED.
         """
@@ -795,12 +815,13 @@ class Authenticate(object):
 
         # if we have a locked_info_function, check that as well
         if locked_info_function is not None:
-            # add the username to the arguments for the locked info function
+            # add the username to the arguments for the locked info
             locked_info_args = self._add_username_to_args(
                 username, locked_info_args)
             if isinstance(locked_info_function, str):
                 if locked_info_function.lower() == 'bigquery':
-                    locked = self._bigquery_locked_info(locked_info_args)
+                    locked = self._bigquery_locked_info(locked_hours,
+                                                        locked_info_args)
                 else:
                     eh.add_dev_error(
                         'login',
@@ -813,7 +834,7 @@ class Authenticate(object):
                     # should just set the authentication_status to False
                     return True
             else:
-                locked = locked_info_function(**locked_info_args)
+                locked = locked_info_function(locked_hours, **locked_info_args)
             if locked:
                 if 'locked_accounts' not in st.session_state.stauth:
                     st.session_state.stauth['locked_accounts'] = []
@@ -936,12 +957,79 @@ class Authenticate(object):
             return self._password_verification_error_handler(verified)
         return False
 
+    def _store_unlocked_time(
+            self,
+            username: str,
+            store_unlocked_time_function: Union[str, Callable],
+            store_unlocked_time_args: dict) -> Union[None, str]:
+        """Store the unlocked time associated with the username."""
+        store_unlocked_time_args = self._add_username_to_args(
+            username, store_unlocked_time_args)
+        if isinstance(store_unlocked_time_function, str):
+            if store_unlocked_time_function.lower() == 'bigquery':
+                store_unlocked_time_args['lock_or_unlock'] = 'unlock'
+                db = DBTools()
+                error = db.store_lock_unlock_times(**store_unlocked_time_args)
+            else:
+                error = ("The store_unlocked_time_function method is not"
+                         "recognized. The available options are: 'bigquery' "
+                         "or a callable function.")
+        else:
+            error = store_unlocked_time_function(
+                username, **store_unlocked_time_args)
+        return error
+
+    def _unlock_time_save_error_handler(self, error: str) -> bool:
+        """
+        Records any errors from the unlock time saving process.
+        """
+        if error is not None:
+            eh.add_dev_error(
+                'login',
+                "There was an error saving the unlock time. "
+                "Error: " + error)
+            return False
+        return True
+
+    def _store_unlock_time_handler(
+            self,
+            username: str,
+            store_unlocked_time_function: Union[str, Callable],
+            store_unlocked_time_args: dict) -> None:
+        """
+        Attempts to store the unlock time, deals with any errors and
+        updates the session_state as necessary.
+        """
+        error = self._store_unlocked_time(username,
+                                          store_unlocked_time_function,
+                                          store_unlocked_time_args)
+        if self._unlock_time_save_error_handler(error):
+            st.session_state.stauth['username'] = username
+            st.session_state.stauth['authentication_status'] = True
+            eh.clear_errors()
+        else:
+            st.session_state.stauth['authentication_status'] = False
+
     def _check_credentials(
             self,
             username_text_key: str,
             password_text_key: str,
             password_pull_function: Union[str, Callable],
-            password_pull_args: dict = None) -> None:
+            password_pull_args: dict = None,
+            incorrect_attempts: int = 10,
+            locked_hours: int = 24,
+            locked_info_function: Union[str, Callable] = None,
+            locked_info_args: dict = None,
+            store_locked_time_function: Union[str, Callable] = None,
+            store_locked_time_args: dict = None,
+            store_unlocked_time_function: Union[str, Callable] = None,
+            store_unlocked_time_args: dict = None,
+            pull_locked_unlock_times_function: Union[str, Callable] = None,
+            pull_locked_unlock_times_args: dict = None,
+            store_incorrect_attempts_function: Union[str, Callable] = None,
+            store_incorrect_attempts_args: dict = None,
+            pull_incorrect_attempts_function: Union[str, Callable] = None,
+            pull_incorrect_attempts_args: dict = None) -> None:
         """
         Checks the validity of the entered credentials, including making
         sure the number of incorrect attempts is not exceeded.
@@ -956,30 +1044,94 @@ class Authenticate(object):
         :param password_pull_args: Arguments for the
             password_pull_function. See the docstring for login for more
             information.
+        :param incorrect_attempts: The number of incorrect attempts
+            allowed before the account is locked.
+
+        The following parameters are all associated with the pattern of
+        storing incorrect login attempts to a database (username and
+        datetime is stored), as well as storing the times of a username
+        being locked and unlocked. If the number of incorrect attempts
+        exceeds a certain number, the account is locked for a certain
+        period of time. If the user successfully logs in, an unlocked time
+        is added to the database, so that we know the account is currently
+        unlocked. This pattern isn't required, but is HIGHLY RECOMMENDED.
+        If not used, the session_state will still record if an account is
+        locked or not, but that can easily be disregarded by refreshing
+        the website.
+
+        :param locked_hours: The number of hours the account is locked
+            after exceeding the number of incorrect attempts.
+        :param locked_info_function: The function to pull the locked
+            information associated with the username. This can be a
+            callable function or a string. See the docstring for
+            _check_locked_account for more information.
+        :param locked_info_args: Arguments for the locked_info_function.
+            See the docstring for _check_locked_account for more
+            information.
+        :param store_locked_time_function: The function to store the
+            locked times associated with the username. This can be a
+            callable function or a string. See the docstring for
+            _store_locked_times for more information.
+        :param store_locked_time_args: Arguments for the
+            store_locked_times_function. See the docstring for
+            _store_locked_times for more information.
+        :param store_unlocked_time_function: The function to store the
+            unlocked times associated with the username. This can be a
+            callable function or a string. See the docstring for
+            _store_unlocked_times for more information.
+        :param store_unlocked_time_args: Arguments for the
+            store_unlocked_times_function. See the docstring for
+            _store_unlocked_times for more information.
+        :param pull_locked_unlock_times_function: The function to pull the
+            locked and unlocked times associated with the username. This
+            can be a callable function or a string. See the docstring for
+            _pull_locked_unlock_times for more information.
+        :param pull_locked_unlock_times_args: Arguments for the
+            pull_locked_unlock_times_function. See the docstring for
+            _pull_locked_unlock_times for more information.
+        :param store_incorrect_attempts_function: The function to store
+            the incorrect attempts associated with the username. This can
+            be a callable function or a string. See the docstring for
+            _store_incorrect_attempts for more information.
+        :param store_incorrect_attempts_args: Arguments for the
+            store_incorrect_attempts_function. See the docstring for
+            _store_incorrect_attempts for more information.
+        :param pull_incorrect_attempts_function: The function to pull the
+            incorrect attempts associated with the username. This can be a
+            callable function or a string. See the docstring for
+            _pull_incorrect_attempts for more information.
+        :param pull_incorrect_attempts_args: Arguments for the
+            pull_incorrect_attempts_function. See the docstring for
+            _pull_incorrect_attempts for more information.
         """
         username = st.session_state[username_text_key]
         password = st.session_state[password_text_key]
 
         # make sure the username and password aren't blank
-        # and only continue if the username exists in our list and the
-        # password matches the username
+        # and only continue if the username exists in our list
         if self._check_login_info(username, password) and \
                 self._check_username(username):
+            # first see if the account has been locked
             if self._check_locked_account(username, locked_info_function,
-                                          locked_info_args):
+                                          locked_info_args, locked_hours):
                 # here we have already set any errors in previous
                 # functions and added the username to the locked list,
                 # so just set authentication_status to false
                 st.session_state.stauth['authentication_status'] = False
             else:
+                # only continue if the password is correct
                 if self._check_pw(password, username, password_pull_function,
                                password_pull_args):
-                    st.session_state.stauth['username'] = username
-                    st.session_state.stauth['authentication_status'] = True
-                    # ADD UNLOCKED TIME
-                    # get rid of any errors, since we have successfully
-                    # logged in
-                    eh.clear_errors()
+                    # if we have a store_unlocked_time_function, store the
+                    # unlocked time
+                    if store_unlocked_time_function is not None:
+                        self._store_unlock_time_handler(
+                            username, store_unlocked_time_function,
+                            store_unlocked_time_args)
+                    else:
+                        st.session_state.stauth['username'] = username
+                        st.session_state.stauth['authentication_status'] = True
+                        eh.clear_errors()
                 else:
                     st.session_state.stauth['authentication_status'] = False
                     # ADD ATTEMPT
@@ -989,7 +1141,7 @@ class Authenticate(object):
                         eh.add_user_error(
                             'login',
                             "Your account is locked. Please try again later.")
-                        # ADD LOCKED TIME
+                        # ADD LOCKED TIME - SEE UNLOCKED TIME PATTERN ABOVE
                         if 'locked_accounts' not in st.session_state.stauth:
                             st.session_state.stauth['locked_accounts'] = []
                         st.session_state.stauth['locked_accounts'].append(

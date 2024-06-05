@@ -294,3 +294,89 @@ class DBTools(object):
             latest_unlock = None
 
         return ('success', (latest_lock, latest_unlock))
+
+    def store_lock_unlock_times(
+            self,
+            username: str,
+            username_col: str,
+            locked_time_col: str,
+            unlocked_time_col: str,
+            lock_or_unlock: str,
+            bq_creds: dict,
+            project: str,
+            dataset: str,
+            table_name: str,
+            if_exists: str = 'append') -> Union[None, str]:
+        """
+        Stores a lock or unlock time to Google BigQuery.
+
+        :param username: The username to store the lock or unlock time
+            for.
+        :param username_col: The column that holds the username.
+        :param locked_time_col: The column that holds the locked_times.
+        :param unlocked_time_col: The column that holds the
+            unlocked_times.
+        :param lock_or_unlock: Whether the time is a lock or unlock time.
+        :param bq_creds: The credentials to access the BigQuery project.
+            These should, at a minimum, have the roles of "BigQuery Data
+            Editor", "BigQuery Read Session User" and "BigQuery Job User".
+        :param project: The project to store the data in.
+        :param dataset: The dataset to store the data in.
+        :param table_name: The name of the table to store the data in.
+        :param if_exists: What to do if the table already exists.
+            Can be 'append', 'replace', or 'fail'. Default is 'append'.
+        :return: None if successful, error message if not.
+        """
+        # turn the username and time into a dataframe
+        if lock_or_unlock == 'lock':
+            store_info = {username_col: [username],
+                          locked_time_col: [pd.to_datetime('now', utc=True)],
+                          unlocked_time_col: [None]}
+        elif lock_or_unlock == 'unlock':
+            store_info = {username_col: [username],
+                          locked_time_col: [None],
+                          unlocked_time_col: [pd.to_datetime('now', utc=True)]}
+        else:
+            return "lock_or_unlock must be either 'lock' or 'unlock'."
+        df = pd.DataFrame(store_info)
+
+        # connect to the database
+        scope = ['https://www.googleapis.com/auth/bigquery']
+        try:
+            creds = service_account.Credentials.from_service_account_info(
+                bq_creds, scopes=scope)
+        except Exception as e:
+            return f"Error loading credentials: {str(e)}"
+
+        try:
+            client = bigquery.Client(credentials=creds)
+        except Exception as e:
+            return f"Error creating the BigQuery client: {str(e)}"
+
+        # set up table_id
+        table_id = project + "." + dataset + "." + table_name
+        # determine behavior if table already exists
+        if if_exists == 'append':
+            write_disposition = 'WRITE_APPEND'
+        elif if_exists == 'replace':
+            write_disposition = 'WRITE_TRUNCATE'
+        else:
+            write_disposition = 'WRITE_EMPTY'
+        # set up the config
+        job_config = bigquery.LoadJobConfig(
+            write_disposition=write_disposition
+        )
+
+        # store
+        try:
+            job = client.load_table_from_dataframe(df, table_id,
+                                                   job_config=job_config)
+            job.result()
+        except Exception as e:
+            return f"Error storing BigQuery data: {str(e)}"
+
+        # test if we can access the table / double check that it saved
+        try:
+            _ = client.get_table(table_id)  # Make an API request.
+        except Exception as e:
+            return f"Error getting the saved table from BigQuery: {str(e)}"
