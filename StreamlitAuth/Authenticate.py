@@ -661,10 +661,38 @@ class Authenticate(object):
             return False
         return True
 
+    def _check_storage_functions(
+            self,
+            locked_info_function: Union[str, Callable],
+            store_locked_time_function: Union[str, Callable],
+            store_unlocked_time_function: Union[str, Callable],
+            store_incorrect_attempts_function: Union[str, Callable],
+            pull_incorrect_attempts_function: Union[str, Callable]) -> bool:
+        """
+        Check whether the optional storage functions are all None or all
+        not None. Either of those is fine, we just can't have some as None
+        and others as not None.
+        """
+        if (locked_info_function is None and
+            store_locked_time_function is None and
+            store_unlocked_time_function is None and
+            store_incorrect_attempts_function is None and
+            pull_incorrect_attempts_function is None) or \
+                (locked_info_function is not None and
+                 store_locked_time_function is not None and
+                 store_unlocked_time_function is not None and
+                 store_incorrect_attempts_function is not None and
+                 pull_incorrect_attempts_function is not None):
+            return True
+        eh.add_dev_error(
+            'login',
+            "If any of the storage functions are used, they must all be "
+            "used.")
+        return False
+
     def _check_login_info(
             self, username: str, password: str) -> bool:
-        """Check whether the login input is valid."""
-        # all fields must be filled
+        """Check whether the username and password are filled in."""
         if not (len(username) > 0 and len(password) > 0):
             eh.add_user_error(
                 'login',
@@ -706,8 +734,70 @@ class Authenticate(object):
                                    username: str,
                                    locked_info_function: Union[str, Callable],
                                    locked_info_args: dict) -> bool:
-        """Pull the most recent locked and unlocked times from the
-            database."""
+        """
+        Pull the most recent locked and unlocked times from the
+        database.
+
+        :param username: The username to check.
+        :param locked_info_function: The function to pull the locked
+            information associated with the username. This can be a
+            callable function or a string.
+
+            The function should pull in locked_info_args, which can be
+            used for things like accessing and pulling from a database.
+            At a minimum, a callable function should take 'username' as
+            one of the locked_info_args, but can include other arguments
+            as well.
+            A callable function should return:
+            - A tuple of an indicator and a value
+            - The indicator should be either 'dev_error' or 'success'.
+            - The value should be a string that contains the error
+                message when the indicator is 'dev_error' and a
+                tuple of (latest_lock_datetime, latest_unlock_datetime)
+                when the indicator is 'success'.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls the locked and unlocked datetimes from a
+                    BigQuery table.
+                    This pre-defined version will look for a table with
+                    three columns corresponding to username, locked_time
+                    and unlocked_time (see locked_info_args below for how
+                    to define there). If the account is locked, the latest
+                    locked_time will be more recent than the latest
+                    unlocked_time. Note that if using 'bigquery' here,
+                    in our other database functions, you should
+                    also be using the 'bigquery' option or using your own
+                    method that writes to a table set up in the same way.
+        :param locked_info_args: Arguments for the locked_info_function.
+            This should not include 'username' since that will
+            automatically be added here. Instead, it should include things
+            like database name, table name, credentials to log into the
+            database, etc.
+
+            If using 'bigquery' as your locked_info_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            username_col (str): The name of the column in the BigQuery
+                table that contains the usernames.
+            locked_time_col (str): The name of the column in the BigQuery
+                table that contains the locked_times.
+            unlocked_time_col (str): The name of the column in the
+                BigQuery table that contains the unlocked_times.
+
+        :return: Tuple with the first value as True if the data was pulled
+            and False if there was an error, and the second value will be
+            a tuple of (latest_lock_datetime, latest_unlock_datetime) if
+            the data was pulled successfully, and None if there was an
+            error.
+        """
         # add the username to the arguments for the locked info
         locked_info_args = self._add_username_to_args(
             username, locked_info_args)
@@ -778,57 +868,10 @@ class Authenticate(object):
         :param username: The username to check.
         :param locked_info_function: The function to pull the locked
             information associated with the username. This can be a
-            callable function or a string.
-
-            The function should pull in two arguments: locked_info_args
-            and locked_hours. The locked_info_args can be used for things
-            like accessing and pulling from a database. The locked_hours
-            is the number of hours that the account should be locked for
-            after a certain number of failed login attempts.
-
-            At a minimum, a callable function should take 'username' as
-            one of the locked_info_args, but can include other arguments
-            as well.
-
-            A callable function should return a boolean value indicating
-            whether the account is locked.
-            True: account is locked.
-            False: account is not locked.
-
-            The current pre-defined function types are:
-                'bigquery': Pulls the locked status from a BigQuery table.
-                    This pre-defined version will look for a table with
-                    three columns corresponding to username, locked_time
-                    and unlocked_time (see locked_info_args below for how
-                    to define there). If the account is locked, the latest
-                    locked_time will be more recent than the latest
-                    unlocked_time. Note that if using 'bigquery' here,
-                    in our other database functions, you should
-                    also be using the 'bigquery' option or using your own
-                    method that writes to a table set up in the same way.
+            callable function or a string. See the docstring for
+            login for more information.
         :param locked_info_args: Arguments for the locked_info_function.
-            This should not include 'username' since that will
-            automatically be added here. Instead, it should include things
-            like database name, table name, credentials to log into the
-            database, etc.
-
-            If using 'bigquery' as your locked_info_function, the
-            following arguments are required:
-
-            bq_creds (dict): Your credentials for BigQuery, such as a
-                service account key (which would be downloaded as JSON and
-                then converted to a dict before using them here).
-            project (str): The name of the Google Cloud project where the
-                BigQuery table is located.
-            dataset (str): The name of the dataset in the BigQuery table.
-            table_name (str): The name of the table in the BigQuery
-                dataset.
-            username_col (str): The name of the column in the BigQuery
-                table that contains the usernames.
-            locked_time_col (str): The name of the column in the BigQuery
-                table that contains the locked_times.
-            unlocked_time_col (str): The name of the column in the
-                BigQuery table that contains the unlocked_times.
+            See the docstring for login for more information.
         :param locked_hours: The number of hours that the account should
             be locked for after a certain number of failed login attempts.
             The desired number of incorrect attempts is set elsewhere.
@@ -842,9 +885,9 @@ class Authenticate(object):
 
         # if we have a locked_info_function, check that as well
         if locked_info_function is not None:
+            # pull the latest locked and unlocked times
             pull_worked, values = self._pull_locked_unlocked_info(
                 username, locked_info_function, locked_info_args)
-
             if pull_worked:
                 latest_lock, latest_unlock = values
                 if self._is_account_locked(
@@ -983,30 +1026,38 @@ class Authenticate(object):
 
         :param username: The username to store the lock or unlock time
             for.
-        :param store_function: The function to store the locked or
-            unlocked time associated with the username. This can be a
+        :param store_unlocked_time_function: The function to store the
+            unlocked datetime associated with the username. This can be a
             callable function or a string.
 
-            At a minimum, a callable function should take 'username' as
-            an argument, but can include other arguments as well.
-            A callable function should return an error message as a
-            string.
+            The function should pull in store_unlocked_time_args, which
+            can be used for things like accessing and storing to a
+            database. At a minimum, a callable function should take
+            'username' as one of the store_unlocked_time_args, but can
+            include other arguments as well. A callable function can
+            return an error message as a string, which our error handler
+            will handle.
 
             The current pre-defined function types are:
-                'bigquery': Stores the locked or unlocked time in a
-                    BigQuery table.
-        :param store_args: Arguments for the store_function. This should
-            not include 'username' since that will automatically be added
-            here based on the user's input.
+                'bigquery': Stores the unlocked datetime to a BigQuery
+                    table. This pre-defined version will look for a table
+                    with three columns corresponding to username,
+                    locked_time and unlocked_time (see
+                    store_unlocked_time_args below for how to define
+                    there).
+                    Note that if using 'bigquery' here, in our other
+                    database functions, you should also be using the
+                    'bigquery' option or using your own method that pulls
+                    from a table set up in the same way.
+        :param store_unlocked_time_args: Arguments for the
+            store_unlocked_time_function. This should not include
+            'username' since that will automatically be added here.
+            Instead, it should include things like database name, table
+            name, credentials to log into the database, etc.
 
-            If using 'bigquery' as your store_function, the following
-            arguments are required:
-            username_col (str): The column to save the username to.
-            locked_time_col (str): The column to save the locked time to.
-            unlocked_time_col (str): The column to save the unlocked time
-                to.
-            lock_or_unlock (str): The string 'lock' or 'unlock' to
-                indicate whether the time is a lock or unlock time.
+            If using 'bigquery' as your store_unlocked_time_function, the
+            following arguments are required:
+
             bq_creds (dict): Your credentials for BigQuery, such as a
                 service account key (which would be downloaded as JSON and
                 then converted to a dict before using them here).
@@ -1015,6 +1066,17 @@ class Authenticate(object):
             dataset (str): The name of the dataset in the BigQuery table.
             table_name (str): The name of the table in the BigQuery
                 dataset.
+            username_col (str): The name of the column in the BigQuery
+                table that contains the usernames.
+            locked_time_col (str): The name of the column in the BigQuery
+                table that contains the locked_times.
+            unlocked_time_col (str): The name of the column in the
+                BigQuery table that contains the unlocked_times.
+        :param lock_or_unlock: Whether we are storing a lock or unlock
+            time. Literally 'lock' or 'unlock'.
+
+        :return: None if there is no error, a string error message if
+            there is an error.
         """
         store_args = self._add_username_to_args(username, store_args)
         if isinstance(store_function, str):
@@ -1050,6 +1112,16 @@ class Authenticate(object):
         """
         Attempts to store the unlock time, deals with any errors and
         updates the session_state as necessary.
+
+        :param username: The username to store the lock or unlock time
+            for.
+        :param store_unlocked_time_function: The function to store the
+            unlocked times associated with the username. This can be a
+            callable function or a string. See the docstring for
+            login for more information.
+        :param store_unlocked_time_args: Arguments for the
+            store_unlocked_times_function. See the docstring for
+            login for more information.
         """
         if 'login_unlock' not in st.session_state.stauth:
             st.session_state.stauth['login_unlock'] = []
@@ -1082,6 +1154,16 @@ class Authenticate(object):
         """
         Attempts to store the lock time, deals with any errors and
         updates the session_state as necessary.
+
+        :param username: The username to store the lock or unlock time
+            for.
+        :param store_locked_time_function: The function to store the
+            locked times associated with the username. This can be a
+            callable function or a string. See the docstring for
+            login for more information.
+        :param store_locked_time_args: Arguments for the
+            store_locked_times_function. See the docstring for
+            login for more information.
         """
         error = self._store_lock_unlock_time(
             username, store_locked_time_function, store_locked_time_args,
@@ -1100,22 +1182,34 @@ class Authenticate(object):
         :param username: The username to store the lock or unlock time
             for.
         :param store_incorrect_attempts_function: The function to store
-            the datetime and username. This can be a callable function or
-            a string. At a minimum, a callable function should take
-            'username' as an argument, but can include other arguments as
-            well. A callable function should return an error message as a
-            string.
+            the datetime and username when an incorrect login attempt
+            occurs. This can be a callable function or a string. At a
+            minimum, a callable function should take 'username' as an
+            argument, but can include other arguments as well. The
+            function should pull in store_incorrect_attempts_args, which
+            can be used for things like accessing and storing to a
+            database. A callable function can return an error message as a
+            string, which our error handler will handle.
 
             The current pre-defined function types are:
-                'bigquery': Stores the info in a BigQuery table.
+                'bigquery': Stores the attempted datetime to a BigQuery
+                    table. This pre-defined version will look for a table
+                    with two columns corresponding to username and
+                    datetime (see store_incorrect_attempts_args below for
+                    how to define there).
+                    Note that if using 'bigquery' here, in our other
+                    database functions, you should also be using the
+                    'bigquery' option or using your own method that pulls
+                    from a table set up in the same way.
         :param store_incorrect_attempts_args: Arguments for the
-            store_function. This should not include 'username' since that
-            will automatically be added here based on the user's input.
+            store_incorrect_attempts_function. This should not include
+            'username' since that will automatically be added here.
+            Instead, it should include things like database name, table
+            name, credentials to log into the database, etc.
 
-            If using 'bigquery' as your store_function, the following
-            arguments are required:
-            username_col (str): The column to save the username to.
-            datetime_col (str): The column to save the datetime to.
+            If using 'bigquery' as your store_incorrect_attempts_function,
+            the following arguments are required:
+
             bq_creds (dict): Your credentials for BigQuery, such as a
                 service account key (which would be downloaded as JSON and
                 then converted to a dict before using them here).
@@ -1124,6 +1218,13 @@ class Authenticate(object):
             dataset (str): The name of the dataset in the BigQuery table.
             table_name (str): The name of the table in the BigQuery
                 dataset.
+            username_col (str): The name of the column in the BigQuery
+                table that contains the usernames.
+            datetime_col (str): The name of the column in the BigQuery
+                table that contains the datetime.
+
+        :return error: The error message if there is an error, otherwise
+            None.
         """
         store_incorrect_attempts_args = self._add_username_to_args(
             username, store_incorrect_attempts_args)
@@ -1161,6 +1262,16 @@ class Authenticate(object):
         """
         Attempts to store the incorrect attempt time and username, deals
         with any errors and updates the session_state as necessary.
+
+        :param username: The username to store the lock or unlock time
+            for.
+        :param store_incorrect_attempts_function: The function to store
+            the incorrect attempts associated with the username. This can
+            be a callable function or a string. See the docstring for
+            login for more information.
+        :param store_incorrect_attempts_args: Arguments for the
+            store_incorrect_attempts_function. See the docstring for
+            login for more information.
 
         :return: False if any errors, True if no errors.
         """
@@ -1201,22 +1312,38 @@ class Authenticate(object):
 
         :param username: The username to check.
         :param pull_incorrect_attempts_function: The function to pull the
-            locked information associated with the username. This can be a
-            callable function or a string.
+            datetimes associated with a username for incorrect login
+            attempts. This can be a callable function or a string.
 
-            At a minimum, a callable function should take 'username' as
-            one of the pull_incorrect_attempts_args, but can include other
-            arguments as well.
+            The function should pull in pull_incorrect_attempts_args,
+            which can be used for things like accessing and pulling from a
+            database. At a minimum, a callable function should take
+            'username' as one of the pull_incorrect_attempts_args, but can
+            include other arguments as well.
+            A callable function should return:
+            - A tuple of an indicator and a value
+            - The indicator should be either 'dev_error' or 'success'.
+            - The value should be a string that contains the error
+                message when the indicator is 'dev_error' and a
+                pandas series of datetimes (if data exists) or None (if
+                data does not exist) when the indicator is 'success'.
 
             The current pre-defined function types are:
-                'bigquery': Pulls the incorrect attempts datetimes from a
+                'bigquery': Pulls the incorrect login datetimes from a
                     BigQuery table.
+                    This pre-defined version will look for a table
+                    with two columns corresponding to username and
+                    datetime (see pull_incorrect_attempts_args below for
+                    how to define there).
+                    Note that if using 'bigquery' here, in our other
+                    database functions, you should also be using the
+                    'bigquery' option or using your own method that pulls
+                    from a table set up in the same way.
         :param pull_incorrect_attempts_args: Arguments for the
-            pull_incorrect_attempts_function.
-            This should not include 'username' since that will
-            automatically be added here. Instead, it should include things
-            like database name, table name, credentials to log into the
-            database, etc.
+            pull_incorrect_attempts_function. This should not include
+            'username' since that will automatically be added here.
+            Instead, it should include things like database name, table
+            name, credentials to log into the database, etc.
 
             If using 'bigquery' as your pull_incorrect_attempts_function,
             the following arguments are required:
@@ -1232,9 +1359,14 @@ class Authenticate(object):
             username_col (str): The name of the column in the BigQuery
                 table that contains the usernames.
             datetime_col (str): The name of the column in the BigQuery
-                table that contains the datetimes for incorrect attempts.
-        :return: True if the account is LOCKED (or there is an error),
-            False if the account is UNLOCKED.
+                table that contains the datetime.
+
+        :return: Tuple with the first value of True if the pull worked and
+            False if there were errors with the pull. The second value
+            should be either a pandas Series if the pull worked and there
+            is existing data or None if the pull "worked" but no data yet
+            exists in the database. The second value will be None if there
+            was an error.
         """
         # add the username to the arguments
         pull_incorrect_attempts_args = self._add_username_to_args(
@@ -1269,7 +1401,31 @@ class Authenticate(object):
             incorrect_attempts: int = 10) -> bool:
         """
         Check if we have too many login attempts for the given username.
+
+        :param username: The username to check.
+        :param pull_incorrect_attempts_function: The function to pull the
+            incorrect attempts associated with the username. This can be a
+            callable function or a string. See the docstring for
+            login for more information.
+        :param pull_incorrect_attempts_args: Arguments for the
+            pull_incorrect_attempts_function. See the docstring for
+            login for more information.
+        :param locked_info_function: The function to pull the locked
+            information associated with the username. This can be a
+            callable function or a string. See the docstring for
+            login for more information.
+        :param locked_info_args: Arguments for the locked_info_function.
+            See the docstring for login for more information.
+        :param locked_hours: The number of hours that the account should
+            be locked for after a certain number of failed login attempts.
+        :param incorrect_attempts: The number of incorrect attempts
+            allowed before the account is locked.
+
+        :return: True if account should be locked, False if account should
+            be unlocked.
         """
+        # first try pulling the data from a database if we have one we
+        # are using for this purpose
         if pull_incorrect_attempts_function is not None:
             attempts_pull_worked, attempts = self._pull_incorrect_attempts(
                 username, pull_incorrect_attempts_function,
@@ -1278,6 +1434,7 @@ class Authenticate(object):
                 username, locked_info_function, locked_info_args)
             _, latest_unlock = lock_unlock
         else:
+            # if not, just use the session_state
             if 'failed_login_attempts' in st.session_state.stauth:
                 attempts = pd.Series(st.session_state.stauth[
                                          'failed_login_attempts'])
@@ -1311,6 +1468,8 @@ class Authenticate(object):
         elif attempts is None:
             return False
         else:
+            # if the data pulls didn't work, we want to lock the account
+            # to be safe
             eh.add_user_error(
                 'login',
                 "Your account is locked. Please try again later.")
@@ -1356,56 +1515,55 @@ class Authenticate(object):
             information.
         :param incorrect_attempts: The number of incorrect attempts
             allowed before the account is locked.
-
-        The following parameters are all associated with the pattern of
-        storing incorrect login attempts to a database (username and
-        datetime is stored), as well as storing the times of a username
-        being locked and unlocked. If the number of incorrect attempts
-        exceeds a certain number, the account is locked for a certain
-        period of time. If the user successfully logs in, an unlocked time
-        is added to the database, so that we know the account is currently
-        unlocked. This pattern isn't required, but is HIGHLY RECOMMENDED.
-        If not used, the session_state will still record if an account is
-        locked or not, but that can easily be disregarded by refreshing
-        the website.
-
         :param locked_hours: The number of hours the account is locked
             after exceeding the number of incorrect attempts.
+
+        The following parameters are all associated with the pattern of
+        storing incorrect login attempts to a database, as well as storing
+        the times of a username being locked and unlocked. If the user
+        successfully logs in, an unlocked time is added to the database,
+        so that we know the account is currently unlocked. If too many
+        incorrect attempts occur at logging in, the account is locked for
+        locked_hours.
+        This database pattern isn't required, but is HIGHLY RECOMMENDED.
+        If not used, the session_state will still record incorrect login
+        attempts and if an account is locked or not, but that can easily
+        be disregarded by refreshing the website.
+
         :param locked_info_function: The function to pull the locked
             information associated with the username. This can be a
             callable function or a string. See the docstring for
-            _check_locked_account for more information.
+            login for more information.
         :param locked_info_args: Arguments for the locked_info_function.
-            See the docstring for _check_locked_account for more
-            information.
+            See the docstring for login for more information.
         :param store_locked_time_function: The function to store the
             locked times associated with the username. This can be a
             callable function or a string. See the docstring for
-            _store_locked_times for more information.
+            login for more information.
         :param store_locked_time_args: Arguments for the
             store_locked_times_function. See the docstring for
-            _store_locked_times for more information.
+            login for more information.
         :param store_unlocked_time_function: The function to store the
             unlocked times associated with the username. This can be a
             callable function or a string. See the docstring for
-            _store_unlocked_times for more information.
+            login for more information.
         :param store_unlocked_time_args: Arguments for the
             store_unlocked_times_function. See the docstring for
-            _store_unlocked_times for more information.
+            login for more information.
         :param store_incorrect_attempts_function: The function to store
             the incorrect attempts associated with the username. This can
             be a callable function or a string. See the docstring for
-            _store_incorrect_attempts for more information.
+            login for more information.
         :param store_incorrect_attempts_args: Arguments for the
             store_incorrect_attempts_function. See the docstring for
-            _store_incorrect_attempts for more information.
+            login for more information.
         :param pull_incorrect_attempts_function: The function to pull the
             incorrect attempts associated with the username. This can be a
             callable function or a string. See the docstring for
-            _pull_incorrect_attempts for more information.
+            login for more information.
         :param pull_incorrect_attempts_args: Arguments for the
             pull_incorrect_attempts_function. See the docstring for
-            _pull_incorrect_attempts for more information.
+            login for more information.
         """
         username = st.session_state[username_text_key]
         password = st.session_state[password_text_key]
@@ -1765,7 +1923,12 @@ class Authenticate(object):
         """
         # check whether the inputs are within the correct set of options
         if not self._check_login_session_states() or \
-                not self._check_login_inputs(location):
+                not self._check_login_inputs(location) or \
+                not self._check_storage_functions(
+                    locked_info_function, store_locked_time_function,
+                    store_unlocked_time_function,
+                    store_incorrect_attempts_function,
+                    pull_incorrect_attempts_function):
             return False
 
         if location == 'main':
@@ -1785,7 +1948,15 @@ class Authenticate(object):
         login_form.form_submit_button(
             'Login', on_click=self._check_credentials,
             args=(username_text_key, password_text_key,
-                  password_pull_function, password_pull_args))
+                  password_pull_function, password_pull_args,
+                  incorrect_attempts, locked_hours,
+                  locked_info_function, locked_info_args,
+                  store_locked_time_function, store_locked_time_args,
+                  store_unlocked_time_function, store_unlocked_time_args,
+                  store_incorrect_attempts_function,
+                  store_incorrect_attempts_args,
+                  pull_incorrect_attempts_function,
+                  pull_incorrect_attempts_args))
 
     def logout(self, button_name: str, location: str='main', key: str=None):
         """
