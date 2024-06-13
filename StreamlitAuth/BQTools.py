@@ -429,7 +429,7 @@ class BQTools(object):
             table_name: str,
             username_col: str,
             username: str,
-            datetime_col: str) -> Tuple[str, Union[pd.Seriers, None, str]]:
+            datetime_col: str) -> Tuple[str, Union[pd.Series, None, str]]:
         """
         Pull a datetimes associated with an incorrect login for a username
         from BigQuery.
