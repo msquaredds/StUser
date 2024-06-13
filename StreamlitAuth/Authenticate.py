@@ -731,10 +731,11 @@ class Authenticate(object):
             return False
         return True
 
-    def _pull_locked_unlocked_info(self,
-                                   username: str,
-                                   locked_info_function: Union[str, Callable],
-                                   locked_info_args: dict) -> bool:
+    def _pull_locked_unlocked_info(
+            self,
+            username: str,
+            locked_info_function: Union[str, Callable],
+            locked_info_args: dict) -> Tuple[bool, Union[tuple, None]]:
         """
         Pull the most recent locked and unlocked times from the
         database.
@@ -820,8 +821,8 @@ class Authenticate(object):
         return False, None
 
     def _is_account_locked(self,
-                           latest_lock: pd.datetime,
-                           latest_unlock: pd.datetime,
+                           latest_lock: datetime,
+                           latest_unlock: datetime,
                            locked_hours: int) -> bool:
         """
         Check whether the account has been locked more recently than
