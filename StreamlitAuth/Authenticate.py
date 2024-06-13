@@ -1093,6 +1093,7 @@ class Authenticate(object):
             if store_function.lower() == 'bigquery':
                 store_args['lock_or_unlock'] = lock_or_unlock
                 db = BQTools()
+                st.write("store_args", store_args)
                 error = db.store_lock_unlock_times(**store_args)
             else:
                 error = ("The store_function method is not recognized. The "
@@ -1591,7 +1592,8 @@ class Authenticate(object):
                 self._check_username(username):
 
             ##############################################################
-            # TESTED THROUGH HERE - ITS WORKED UP UNTIL HERE
+            # _check_locked_account works when there is nothing to pull
+            # _check_pw works if correct password is entered
             ##############################################################
 
             # first see if the account has been locked

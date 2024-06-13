@@ -346,6 +346,8 @@ class BQTools(object):
         else:
             return "lock_or_unlock must be either 'lock' or 'unlock'."
         df = pd.DataFrame(store_info)
+        st.write("store_info", store_info)
+        st.write("df", df)
 
         # connect to the database
         client = self._setup_connection(bq_creds)
@@ -360,11 +362,13 @@ class BQTools(object):
 
         # store
         job_result = self._store_df(df, table_id, job_config)
+        st.write("job_result", job_result)
         if isinstance(job_result, str):
             return job_result
 
         # test if we can access the table / double check that it saved
         stored_result = self._test_data_stored(client, table_id)
+        st.write("stored_result", stored_result)
         if isinstance(stored_result, str):
             return stored_result
 
