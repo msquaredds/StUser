@@ -837,6 +837,8 @@ class Authenticate(object):
         """
         # find the time that was locked_hours ago
         locked_time = datetime.utcnow() - timedelta(hours=locked_hours)
+        st.write("locked_time", locked_time)
+        st.write(type(locked_time))
         # we are locked if the times both exist and the latest lock is
         # more recent, or if the latest lock exists and the latest unlock
         # does not
@@ -890,8 +892,14 @@ class Authenticate(object):
             # pull the latest locked and unlocked times
             pull_worked, values = self._pull_locked_unlocked_info(
                 username, locked_info_function, locked_info_args)
+            st.write("pull_worked", pull_worked)
+            st.write("values", values)
             if pull_worked:
                 latest_lock, latest_unlock = values
+                st.write("latest_lock", latest_lock)
+                st.write(type(latest_lock))
+                st.write("latest_unlock", latest_unlock)
+                st.write(type(latest_unlock))
                 if self._is_account_locked(
                         latest_lock, latest_unlock, locked_hours):
                     return True
@@ -1432,9 +1440,13 @@ class Authenticate(object):
             attempts_pull_worked, attempts = self._pull_incorrect_attempts(
                 username, pull_incorrect_attempts_function,
                 pull_incorrect_attempts_args)
+            st.write("attempts_pull_worked", attempts_pull_worked)
+            st.write("attempts", attempts)
             locks_pull_worked, lock_unlock = self._pull_locked_unlocked_info(
                 username, locked_info_function, locked_info_args)
             _, latest_unlock = lock_unlock
+            st.write("locks_pull_worked", locks_pull_worked)
+            st.write("latest_unlock", latest_unlock)
         else:
             # if not, just use the session_state
             if 'failed_login_attempts' in st.session_state.stauth:
@@ -1452,14 +1464,17 @@ class Authenticate(object):
         if attempts_pull_worked and locks_pull_worked and attempts is not None:
             # sort attempts by datetime, starting with the most recent
             attempts = attempts.sort_values('datetime', ascending=False)
+            st.write("attempts", attempts)
             # count the number of attempts in the last locked_hours
             recent_attempts = attempts[
                 attempts['datetime'] > datetime.utcnow() - timedelta(
                     hours=locked_hours)]
+            st.write("recent_attempts", recent_attempts)
             # count the number of attempts after latest_unlock
             if latest_unlock is not None:
                 recent_attempts = recent_attempts[
                     recent_attempts['datetime'] > latest_unlock]
+                st.write("recent_attempts", recent_attempts)
             if len(recent_attempts) >= incorrect_attempts:
                 eh.add_user_error(
                     'login',
@@ -1574,6 +1589,11 @@ class Authenticate(object):
         # and only continue if the username exists in our list
         if self._check_login_info(username, password) and \
                 self._check_username(username):
+
+            ##############################################################
+            # TESTED THROUGH HERE - ITS WORKED UP UNTIL HERE
+            ##############################################################
+
             # first see if the account has been locked
             if self._check_locked_account(username, locked_info_function,
                                           locked_info_args, locked_hours):
@@ -1585,6 +1605,7 @@ class Authenticate(object):
                 # only continue if the password is correct
                 if self._check_pw(password, username, password_pull_function,
                                   password_pull_args):
+                    st.write("password correct")
                     # note that even with errors storing the data, we
                     # still let the user login, so we clear the errors
                     # first, so that we can record any storage errors and
@@ -1598,6 +1619,7 @@ class Authenticate(object):
                     st.session_state.stauth['username'] = username
                     st.session_state.stauth['authentication_status'] = True
                 else:
+                    st.write("password wrong")
                     st.session_state.stauth['authentication_status'] = False
                     if (not self._store_incorrect_attempts_handler(
                             username, store_incorrect_attempts_function,
@@ -1608,6 +1630,7 @@ class Authenticate(object):
                                 pull_incorrect_attempts_args,
                                 locked_info_function, locked_info_args,
                                 locked_hours, incorrect_attempts)):
+                        st.write("too many attempts")
                         if 'locked_accounts' not in st.session_state.stauth:
                             st.session_state.stauth['locked_accounts'] = []
                         st.session_state.stauth['locked_accounts'].append(
