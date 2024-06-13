@@ -1093,7 +1093,6 @@ class Authenticate(object):
             if store_function.lower() == 'bigquery':
                 store_args['lock_or_unlock'] = lock_or_unlock
                 db = BQTools()
-                st.write("store_args", store_args)
                 error = db.store_lock_unlock_times(**store_args)
             else:
                 error = ("The store_function method is not recognized. The "

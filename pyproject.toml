@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "StreamlitAuth"
-version = '0.1.49'
+version = '0.1.50'
 description = 'User login and authentication for Streamlit apps'
 readme = 'README.md'
 authors = [
