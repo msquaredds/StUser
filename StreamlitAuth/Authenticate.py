@@ -1456,17 +1456,16 @@ class Authenticate(object):
 
         if attempts_pull_worked and locks_pull_worked and attempts is not None:
             # sort attempts by datetime, starting with the most recent
-            attempts = attempts.sort_values('datetime', ascending=False)
+            attempts = attempts.sort_values(ascending=False)
             st.write("attempts", attempts)
             # count the number of attempts in the last locked_hours
             recent_attempts = attempts[
-                attempts['datetime'] > datetime.utcnow() - timedelta(
-                    hours=locked_hours)]
+                attempts > datetime.utcnow() - timedelta(hours=locked_hours)]
             st.write("recent_attempts", recent_attempts)
             # count the number of attempts after latest_unlock
             if latest_unlock is not None:
                 recent_attempts = recent_attempts[
-                    recent_attempts['datetime'] > latest_unlock]
+                    recent_attempts > latest_unlock]
                 st.write("recent_attempts", recent_attempts)
             if len(recent_attempts) >= incorrect_attempts:
                 eh.add_user_error(
@@ -1588,6 +1587,7 @@ class Authenticate(object):
             #    or there is unlocked time but no locked time
             # _check_pw works in its entirety
             # _store_unlock_time_handler works in its entirety
+            # _store_incorrect_attempts_handler works in its entirety
             ##############################################################
 
             # first see if the account has been locked
