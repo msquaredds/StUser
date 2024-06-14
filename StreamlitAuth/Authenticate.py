@@ -1107,6 +1107,7 @@ class Authenticate(object):
         Records any errors from the unlock time saving process.
         """
         if error is not None:
+            st.write("error", error)
             eh.add_dev_error(
                 'login',
                 "There was an error saving the unlock time. "
@@ -1142,6 +1143,7 @@ class Authenticate(object):
             error = self._store_lock_unlock_time(
                 username, store_unlocked_time_function,
                 store_unlocked_time_args, 'unlock')
+            st.write("error message", error)
             self._unlock_time_save_error_handler(error)
         else:
             return True
