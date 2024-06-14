@@ -900,11 +900,8 @@ class Authenticate(object):
                 st.write(type(latest_lock))
                 st.write("latest_unlock", latest_unlock)
                 st.write(type(latest_unlock))
-                if self._is_account_locked(
-                        latest_lock, latest_unlock, locked_hours):
-                    return True
-                else:
-                    return False
+                return self._is_account_locked(
+                    latest_lock, latest_unlock, locked_hours)
             else:
                 return True
         else:
@@ -1235,7 +1232,7 @@ class Authenticate(object):
         store_incorrect_attempts_args = self._add_username_to_args(
             username, store_incorrect_attempts_args)
         if isinstance(store_incorrect_attempts_function, str):
-            if store_function.lower() == 'bigquery':
+            if store_incorrect_attempts_function.lower() == 'bigquery':
                 db = BQTools()
                 error = db.store_incorrect_login_times(
                     **store_incorrect_attempts_args)
@@ -1588,10 +1585,9 @@ class Authenticate(object):
 
             ##############################################################
             # _check_locked_account works when there is nothing to pull
+            #    or there is unlocked time but no locked time
             # _check_pw works if correct password is entered
-            # WHY WON'T THE ERRORS FROM THE UNLOCK TIME SAVE SHOW UP???
-            # THE UNLOCK SAVE ISN'T WORKING, AS WELL, BECAUSE IT ISN'T
-            # GETTING THE CLIENT
+            # _store_unlock_time_handler works in its entirety
             ##############################################################
 
             # first see if the account has been locked
