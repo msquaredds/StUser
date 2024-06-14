@@ -124,7 +124,7 @@ class BQTools(object):
         job_config = self._setup_job_config(if_exists)
 
         # store
-        job_result = self._store_df(df, table_id, job_config)
+        job_result = self._store_df(client, df, table_id, job_config)
         if isinstance(job_result, str):
             return job_result
 
@@ -418,7 +418,7 @@ class BQTools(object):
         job_config = self._setup_job_config(if_exists)
 
         # store
-        job_result = self._store_df(df, table_id, job_config)
+        job_result = self._store_df(client, df, table_id, job_config)
         if isinstance(job_result, str):
             return job_result
 

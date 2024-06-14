@@ -1586,7 +1586,7 @@ class Authenticate(object):
             ##############################################################
             # _check_locked_account works when there is nothing to pull
             #    or there is unlocked time but no locked time
-            # _check_pw works if correct password is entered
+            # _check_pw works in its entirety
             # _store_unlock_time_handler works in its entirety
             ##############################################################
 
