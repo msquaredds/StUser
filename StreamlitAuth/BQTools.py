@@ -42,6 +42,7 @@ class BQTools(object):
         return job_config
 
     def _store_df(self,
+                  client: bigquery.Client,
                   df: pd.DataFrame,
                   table_id: str,
                   job_config: bigquery.LoadJobConfig) -> Union[None, str]:
@@ -364,14 +365,12 @@ class BQTools(object):
         job_config = self._setup_job_config(if_exists)
 
         # store
-        job_result = self._store_df(df, table_id, job_config)
-        st.write("job_result", job_result)
+        job_result = self._store_df(client, df, table_id, job_config)
         if isinstance(job_result, str):
             return job_result
 
         # test if we can access the table / double check that it saved
         stored_result = self._test_data_stored(client, table_id)
-        st.write("stored_result", stored_result)
         if isinstance(stored_result, str):
             return stored_result
 

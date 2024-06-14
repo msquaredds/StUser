@@ -1107,12 +1107,10 @@ class Authenticate(object):
         Records any errors from the unlock time saving process.
         """
         if error is not None:
-            st.write("error", error)
             eh.add_dev_error(
                 'login',
                 "There was an error saving the unlock time. "
                 "Error: " + error)
-            st.write(st.session_state.stauth['dev_errors']['login'])
 
     def _store_unlock_time_handler(
             self,
@@ -1142,7 +1140,6 @@ class Authenticate(object):
             error = self._store_lock_unlock_time(
                 username, store_unlocked_time_function,
                 store_unlocked_time_args, 'unlock')
-            st.write("error message", error)
             self._unlock_time_save_error_handler(error)
 
     def _lock_time_save_error_handler(self, error: str) -> None:
@@ -1592,6 +1589,9 @@ class Authenticate(object):
             ##############################################################
             # _check_locked_account works when there is nothing to pull
             # _check_pw works if correct password is entered
+            # WHY WON'T THE ERRORS FROM THE UNLOCK TIME SAVE SHOW UP???
+            # THE UNLOCK SAVE ISN'T WORKING, AS WELL, BECAUSE IT ISN'T
+            # GETTING THE CLIENT
             ##############################################################
 
             # first see if the account has been locked
