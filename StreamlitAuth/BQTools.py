@@ -42,7 +42,6 @@ class BQTools(object):
         return job_config
 
     def _store_df(self,
-                  client: bigquery.Client,
                   df: pd.DataFrame,
                   table_id: str,
                   job_config: bigquery.LoadJobConfig) -> Union[None, str]:
