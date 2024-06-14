@@ -1112,7 +1112,7 @@ class Authenticate(object):
                 'login',
                 "There was an error saving the unlock time. "
                 "Error: " + error)
-            st.write(st.session_state.stauth['dev_errors']['login']
+            st.write(st.session_state.stauth['dev_errors']['login'])
 
     def _store_unlock_time_handler(
             self,
