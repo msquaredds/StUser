@@ -1102,7 +1102,7 @@ class Authenticate(object):
             error = store_function(**store_args)
         return error
 
-    def _unlock_time_save_error_handler(self, error: str) -> bool:
+    def _unlock_time_save_error_handler(self, error: str) -> None:
         """
         Records any errors from the unlock time saving process.
         """
@@ -1112,8 +1112,7 @@ class Authenticate(object):
                 'login',
                 "There was an error saving the unlock time. "
                 "Error: " + error)
-            return False
-        return True
+            st.write(st.session_state.stauth['dev_errors']['login']
 
     def _store_unlock_time_handler(
             self,
@@ -1145,8 +1144,6 @@ class Authenticate(object):
                 store_unlocked_time_args, 'unlock')
             st.write("error message", error)
             self._unlock_time_save_error_handler(error)
-        else:
-            return True
 
     def _lock_time_save_error_handler(self, error: str) -> None:
         """

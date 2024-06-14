@@ -50,6 +50,7 @@ def clear_errors() -> None:
     Clear all dev_errors and user_errors from
         streamlit.session_state.stauth.
     """
+    st.write("CLEARING ERRORS")
     if 'stauth' in st.session_state:
         if 'dev_errors' in st.session_state.stauth:
             st.session_state.stauth['dev_errors'] = {}
