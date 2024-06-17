@@ -349,9 +349,6 @@ class BQTools(object):
         else:
             return "lock_or_unlock must be either 'lock' or 'unlock'."
         df = pd.DataFrame(store_info)
-        import streamlit as st
-        st.write("store_info", store_info)
-        st.write("df", df)
 
         # connect to the database
         client = self._setup_connection(bq_creds)
