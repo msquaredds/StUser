@@ -882,11 +882,6 @@ class Authenticate(object):
         :return: True if the account is LOCKED (or there is an error),
             False if the account is UNLOCKED.
         """
-        # first check the session state
-        if 'locked_accounts' in st.session_state.stauth and \
-                username in st.session_state.stauth['locked_accounts']:
-            return True
-
         # if we have a locked_info_function, check that;
         # otherwise just use what we have saved in the session_state
         if locked_info_function is not None:
@@ -1619,14 +1614,17 @@ class Authenticate(object):
 
             ##############################################################
             # _check_locked_account
-            # _check_pw works in its entirety
+            # _check_pw
             # _store_unlock_time_handler
             # _store_incorrect_attempts_handler
             # _check_too_many_attempts
             # _store_lock_time_handler
 
-            # Everything works for the DB version, test the non-DB version
-            # and test the DB version once 24 hours have passed
+            # Everything works for the DB version and the session_state
+            # version
+            # Need to test both versions once 24 hours have passed
+            # and also try 2 wrong attempts, then login, then 2 more wrong
+            # attempts
             ##############################################################
 
             # first see if the account has been locked
