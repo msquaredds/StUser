@@ -887,7 +887,8 @@ class Authenticate(object):
                 username in st.session_state.stauth['locked_accounts']:
             return True
 
-        # if we have a locked_info_function, check that as well
+        # if we have a locked_info_function, check that;
+        # otherwise just use what we have saved in the session_state
         if locked_info_function is not None:
             # pull the latest locked and unlocked times
             pull_worked, values = self._pull_locked_unlocked_info(
@@ -900,12 +901,24 @@ class Authenticate(object):
                 st.write(type(latest_lock))
                 st.write("latest_unlock", latest_unlock)
                 st.write(type(latest_unlock))
-                return self._is_account_locked(
-                    latest_lock, latest_unlock, locked_hours)
             else:
                 return True
         else:
-            return False
+            if ('login_lock' in st.session_state.stauth and
+                    username in st.session_state.stauth['login_lock'].keys()):
+                latest_lock = max(st.session_state.stauth['login_lock'][
+                                      username])
+            else:
+                latest_lock = None
+            if ('login_unlock' in st.session_state.stauth and
+                    username in st.session_state.stauth[
+                        'login_unlock'].keys()):
+                latest_unlock = max(st.session_state.stauth['login_unlock'][
+                                        username])
+            else:
+                latest_unlock = None
+        return self._is_account_locked(
+            latest_lock, latest_unlock, locked_hours)
 
     def _password_pull_error_handler(self, indicator: str,
                                      value: str) -> bool:
@@ -1129,9 +1142,12 @@ class Authenticate(object):
             login for more information.
         """
         if 'login_unlock' not in st.session_state.stauth:
-            st.session_state.stauth['login_unlock'] = []
+            st.session_state.stauth['login_unlock'] = {}
+        if username not in st.session_state.stauth['login_unlock'].keys():
+            st.session_state.stauth['login_unlock'][username] = []
         # append the current datetime
-        st.session_state.stauth['login_unlock'].append(datetime.utcnow())
+        st.session_state.stauth['login_unlock'][username].append(
+            datetime.utcnow())
 
         if store_unlocked_time_function is not None:
             error = self._store_lock_unlock_time(
@@ -1168,10 +1184,19 @@ class Authenticate(object):
             store_locked_times_function. See the docstring for
             login for more information.
         """
-        error = self._store_lock_unlock_time(
-            username, store_locked_time_function, store_locked_time_args,
-            'lock')
-        self._lock_time_save_error_handler(error)
+        if 'login_lock' not in st.session_state.stauth:
+            st.session_state.stauth['login_lock'] = {}
+        if username not in st.session_state.stauth['login_lock'].keys():
+            st.session_state.stauth['login_lock'][username] = []
+        # append the current datetime
+        st.session_state.stauth['login_lock'][username].append(
+            datetime.utcnow())
+
+        if store_locked_time_function is not None:
+            error = self._store_lock_unlock_time(
+                username, store_locked_time_function, store_locked_time_args,
+                'lock')
+            self._lock_time_save_error_handler(error)
 
     def _store_incorrect_attempt(
             self,
@@ -1279,9 +1304,12 @@ class Authenticate(object):
         :return: False if any errors, True if no errors.
         """
         if 'failed_login_attempts' not in st.session_state.stauth:
-            st.session_state.stauth['failed_login_attempts'] = []
+            st.session_state.stauth['failed_login_attempts'] = {}
+        if username not in st.session_state.stauth[
+                'failed_login_attempts'].keys():
+            st.session_state.stauth['failed_login_attempts'][username] = []
         # append the current datetime
-        st.session_state.stauth['failed_login_attempts'].append(
+        st.session_state.stauth['failed_login_attempts'][username].append(
             datetime.utcnow())
 
         if store_incorrect_attempts_function is not None:
@@ -1442,17 +1470,24 @@ class Authenticate(object):
             st.write("latest_unlock", latest_unlock)
         else:
             # if not, just use the session_state
-            if 'failed_login_attempts' in st.session_state.stauth:
+            if ('failed_login_attempts' in st.session_state.stauth and
+                    username in st.session_state.stauth[
+                        'failed_login_attempts'].keys()):
                 attempts = pd.Series(st.session_state.stauth[
-                                         'failed_login_attempts'])
+                                         'failed_login_attempts'][username])
             else:
                 attempts = None
-            if 'login_unlock' in st.session_state.stauth:
-                latest_unlock = st.session_state.stauth['login_unlock'][-1]
+            if ('login_unlock' in st.session_state.stauth and
+                    username in st.session_state.stauth[
+                        'login_unlock'].keys()):
+                latest_unlock = max(st.session_state.stauth['login_unlock'][
+                    username])
             else:
                 latest_unlock = None
             attempts_pull_worked = True
             locks_pull_worked = True
+            st.write("attempts", attempts)
+            st.write("latest_unlock", latest_unlock)
 
         if attempts_pull_worked and locks_pull_worked and attempts is not None:
             # sort attempts by datetime, starting with the most recent
@@ -1583,11 +1618,15 @@ class Authenticate(object):
                 self._check_username(username):
 
             ##############################################################
-            # _check_locked_account works when there is nothing to pull
-            #    or there is unlocked time but no locked time
+            # _check_locked_account
             # _check_pw works in its entirety
-            # _store_unlock_time_handler works in its entirety
-            # _store_incorrect_attempts_handler works in its entirety
+            # _store_unlock_time_handler
+            # _store_incorrect_attempts_handler
+            # _check_too_many_attempts
+            # _store_lock_time_handler
+
+            # Everything works for the DB version, test the non-DB version
+            # and test the DB version once 24 hours have passed
             ##############################################################
 
             # first see if the account has been locked
@@ -1595,7 +1634,8 @@ class Authenticate(object):
                                           locked_info_args, locked_hours):
                 if 'locked_accounts' not in st.session_state.stauth:
                     st.session_state.stauth['locked_accounts'] = []
-                st.session_state.stauth['locked_accounts'].append(username)
+                if username not in st.session_state.stauth['locked_accounts']:
+                    st.session_state.stauth['locked_accounts'].append(username)
                 st.session_state.stauth['authentication_status'] = False
             else:
                 # only continue if the password is correct
@@ -1629,8 +1669,10 @@ class Authenticate(object):
                         st.write("too many attempts")
                         if 'locked_accounts' not in st.session_state.stauth:
                             st.session_state.stauth['locked_accounts'] = []
-                        st.session_state.stauth['locked_accounts'].append(
-                            username)
+                        if username not in st.session_state.stauth[
+                                'locked_accounts']:
+                            st.session_state.stauth['locked_accounts'].append(
+                                username)
                         self._store_lock_time_handler(
                             username, store_locked_time_function,
                             store_locked_time_args)
