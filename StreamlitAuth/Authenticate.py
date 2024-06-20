@@ -71,8 +71,6 @@ class Authenticate(object):
             st.session_state.stauth['authentication_status'] = False
         if 'username' not in st.session_state.stauth:
             st.session_state.stauth['username'] = None
-        if 'logout' not in st.session_state.stauth:
-            st.session_state.stauth['logout'] = False
 
     def _check_register_user_session_states(
             self, preauthorization: bool) -> bool:
@@ -1976,33 +1974,48 @@ class Authenticate(object):
                   pull_incorrect_attempts_function,
                   pull_incorrect_attempts_args))
 
-    def logout(self, button_name: str, location: str='main', key: str=None):
+    def _check_logout_inputs(self, location: str) -> bool:
+        """
+        Check whether the logout inputs are within the correct set of
+        options.
+
+        :param location: The location of the login form i.e. main or
+            sidebar.
+        """
+        if location not in ['main', 'sidebar']:
+            eh.add_dev_error(
+                'logout',
+                "location argument must be one of 'main' or 'sidebar'")
+            return False
+        return True
+
+    def _logout(self) -> None:
+        """Remove the session states showing the user is logged in."""
+        st.session_state.stauth['username'] = None
+        st.session_state.stauth['authentication_status'] = False
+
+    def logout(self,
+               location: str = 'main',
+               logout_button_key: str = 'logout_button') -> None:
         """
         Creates a logout button.
 
-        Parameters
-        ----------
-        button_name: str
-            The rendered name of the logout button.
-        location: str
-            The location of the logout button i.e. main or sidebar.
+        :param location: The location of the login form i.e. main or
+            sidebar.
+        :param logout_button_key: The key for the logout button. We
+            attempt to default to a unique key, but you can put your own
+            in here if you want to customize it or have clashes with other
+            keys.
         """
-        if location not in ['main', 'sidebar']:
-            raise ValueError("Location must be one of 'main' or 'sidebar'")
+        # check whether the inputs are within the correct set of options
+        if not self._check_logout_inputs(location):
+            return False
+
         if location == 'main':
-            if st.button(button_name, key):
-                self.cookie_manager.delete(self.cookie_name)
-                st.session_state['logout'] = True
-                st.session_state['name'] = None
-                st.session_state['username'] = None
-                st.session_state['authentication_status'] = None
+            st.button('Logout', key=logout_button_key, on_click=self._logout)
         elif location == 'sidebar':
-            if st.sidebar.button(button_name, key):
-                self.cookie_manager.delete(self.cookie_name)
-                st.session_state['logout'] = True
-                st.session_state['name'] = None
-                st.session_state['username'] = None
-                st.session_state['authentication_status'] = None
+            st.sidebar.button('Logout', key=logout_button_key,
+                              on_click=self._logout)
 
     def _update_password(self, username: str, password: str):
         """
