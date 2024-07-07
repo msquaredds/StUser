@@ -259,6 +259,44 @@ class Authenticate(object):
             return False
         return True
 
+    def _get_message_subject(self, message_type: str,
+                             website_name: str) -> str:
+        if message_type == 'register_user':
+            return f"""{website_name}: Thank You for Registering"""
+        elif message_type == 'forgot_username':
+            return f"""{website_name}: Your Username"""
+
+    def _get_message_body(self, message_type: str,
+                          website_name: str, username: str) -> str:
+        if message_type == 'register_user':
+            message_body = \
+                (f"""Thank you for registering for {website_name}!\n
+                 You have successfully registered with the username: 
+                 {username}.\n
+                 If you did not register or you have any questions,
+                 please contact us at {website_email}.""")
+        elif message_type == 'forgot_username':
+            message_body = \
+                (f"""You requested your username for {website_name}.\n
+                 Your username is: {username}.\n
+                 If you did not request your username or you have any
+                 questions, please contact us at {website_email}.""")
+        return message_body
+
+    def _check_email_type(self, message_type: str) -> bool:
+        """
+        Check on whether the message_type for an email is within the
+        correct set of options.
+        """
+        if not isinstance(message_type, str) or \
+                message_type not in ['register_user', 'forgot_username']:
+            eh.add_dev_error(
+                message_type,
+                "The message_type is not recognized. The available "
+                "options are: 'register_user' or 'forgot_username'.")
+            return False
+        return True
+
     def _check_email_inputs(self, website_name: str = None,
                             website_email: str = None) -> bool:
         """
@@ -293,27 +331,27 @@ class Authenticate(object):
             return False
         return True
 
-    def _send_register_user_email(
-            self, new_email: str, new_username: str,
-            email_inputs: dict, email_user: Union[callable, str],
+    def _send_user_email(
+            self, message_type: str, email_inputs: dict, username: str,
+            user_email: str, email_user: Union[callable, str],
             email_creds: dict = None) -> None:
         """
-        Send a confirmation email to the newly registered user.
+        Send an email to the user. Can be used for user registration or
+        a forgotten username or password.
 
-        :param new_email: The new user's email.
-        :param new_username: The new user's username.
+        :param message_type: The type of message we are sending. Can be
+            'register_user' or 'forgot_username'.
         :param email_inputs: The inputs for the email sending process.
-            Only necessary for when email_user is not None.
             These are generic for any email method and currently include:
 
             website_name (str): The name of the website where the
                 registration is happening.
             website_email (str) : The email that is sending the
                 registration confirmation.
-        :param email_user: If we want to email the user after registering,
-            provide the function (callable) or method (str) for email
-            here. See the docstring for register_user for more
-            information.
+        :param username: The user's username.
+        :param user_email: The user's email.
+        :param email_user: Provide the function (callable) or method (str)
+            for email here.
             "gmail": the user wants to use their Gmail account to send
                 the email and must have the gmail API enabled. Note that
                 this only works for local / desktop apps. If using this
@@ -331,8 +369,13 @@ class Authenticate(object):
             necessary if email_user is not None. See the
             docstring for register_user for more information.
         """
-        email_handler = Email(new_email, new_username, **email_inputs)
-        if self._check_email_inputs(**email_inputs):
+        if (self._check_email_inputs(**email_inputs) and
+                self._check_email_type(message_type)):
+            subject = self._get_message_subject(
+                message_type, email_inputs['website_name'])
+            body = self._get_message_body(
+                message_type, email_inputs['website_name'], username)
+            email_handler = Email(user_email, subject, body, **email_inputs)
             if isinstance(email_user, str):
                 if email_user.lower() == 'gmail':
                     creds = email_handler.get_gmail_oauth2_credentials(
@@ -423,15 +466,15 @@ class Authenticate(object):
                     cred_save_function, cred_save_args)
                 if self._cred_save_error_handler(error):
                     if email_user is not None:
-                        self._send_register_user_email(
-                            new_email, new_username, email_inputs, email_user,
-                            email_creds)
+                        self._send_user_email(
+                            'register_user', email_inputs, new_username,
+                            new_email, email_user, email_creds)
                     else:
                         eh.clear_errors()
             elif email_user is not None:
-                self._send_register_user_email(
-                    new_email, new_username, email_inputs, email_user,
-                    email_creds)
+                self._send_user_email(
+                    'register_user', email_inputs, new_username,
+                    new_email, email_user, email_creds)
             else:
                 # get rid of any errors, since we have successfully
                 # registered
@@ -2017,231 +2060,306 @@ class Authenticate(object):
             st.sidebar.button('Logout', key=logout_button_key,
                               on_click=self._logout)
 
-    def _update_password(self, username: str, password: str):
+    def _check_forgot_username_inputs(self, location: str) -> bool:
         """
-        Updates credentials dictionary with user's reset hashed password.
+        Check whether the forgot username inputs are within the correct
+        set of options.
 
-        Parameters
-        ----------
-        username: str
-            The username of the user to update the password for.
-        password: str
-            The updated plain text password.
-        """
-        self.credentials['usernames'][username]['password'] = Hasher([password]).generate()[0]
-
-    def reset_password(self, username: str, form_name: str, location: str='main') -> bool:
-        """
-        Creates a password reset widget.
-
-        Parameters
-        ----------
-        username: str
-            The username of the user to reset the password for.
-        form_name: str
-            The rendered name of the password reset form.
-        location: str
-            The location of the password reset form i.e. main or sidebar.
-        Returns
-        -------
-        str
-            The status of resetting the password.
+        :param location: The location of the login form i.e. main or
+            sidebar.
         """
         if location not in ['main', 'sidebar']:
-            raise ValueError("Location must be one of 'main' or 'sidebar'")
-        if location == 'main':
-            reset_password_form = st.form('Reset password')
-        elif location == 'sidebar':
-            reset_password_form = st.sidebar.form('Reset password')
-        
-        reset_password_form.subheader(form_name)
-        self.username = username.lower()
-        self.password = reset_password_form.text_input('Current password', type='password')
-        new_password = reset_password_form.text_input('New password', type='password')
-        new_password_repeat = reset_password_form.text_input('Repeat password', type='password')
+            eh.add_dev_error(
+                'logout',
+                "location argument must be one of 'main' or 'sidebar'")
+            return False
+        return True
 
-        if reset_password_form.form_submit_button('Reset'):
-            if self._check_credentials(inplace=False):
-                if len(new_password) > 0:
-                    if new_password == new_password_repeat:
-                        if self.password != new_password: 
-                            self._update_password(self.username, new_password)
-                            return True
-                        else:
-                            raise ResetError('New and current passwords are the same')
-                    else:
-                        raise ResetError('Passwords do not match')
-                else:
-                    raise ResetError('No new password provided')
+    def _check_email_info(self, email: str) -> bool:
+        """Check whether the email is filled in."""
+        if not (len(email) > 0):
+            eh.add_user_error(
+                'forgot_username',
+                "Please enter an email.")
+            return False
+        return True
+
+    def _add_email_to_args(
+            self, email: str, existing_args: dict) -> dict:
+        """Add the email to existing_args."""
+        if existing_args is None:
+            existing_args = {}
+        existing_args['email'] = email
+        return existing_args
+
+    def _username_pull_error_handler(self, indicator: str,
+                                     value: str) -> bool:
+        """ Records any errors from the username pulling process. Note
+            that since we don't want the user to know if they entered a
+            non-valid email, we only record dev_errors here."""
+        if indicator == 'dev_error':
+            eh.add_dev_error(
+                'forgot_username',
+                "There was an error pulling the user's username. "
+                "Error: " + value)
+            return False
+        elif indicator == 'user_error':
+            return False
+        return True
+
+    def _pull_username(
+            self,
+            email: str,
+            username_pull_function: Union[str, Callable],
+            username_pull_args: dict = None) -> bool:
+        """
+        Pulls the username associated with the email.
+
+        :param email: The entered email.
+        :param username_pull_function: The function to pull the
+            username associated with the email. This can be a callable
+            function or a string.
+
+            At a minimum, a callable function should take 'email' as
+            an argument, but can include other arguments as well.
+            A callable function should return:
+             - A tuple of an indicator and a value
+             - The indicator should be either 'dev_error' or 'success'
+             - The value should be a string that contains the error
+                message when the indicator is 'dev_error' and the username
+                when the indicator is 'success'
+
+            The current pre-defined function types are:
+                'bigquery': Pulls the username from a BigQuery table.
+        :param username_pull_args: Arguments for the
+            username_pull_function. This should not include 'email'
+            since that will automatically be added here based on the
+            user's input.
+
+            If using 'bigquery' as your username_pull_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails.
+            username_col (str): The name of the column in the BigQuery
+                table that contains the usernames.
+        """
+        # add the email to the arguments for the username pull function
+        username_pull_args = self._add_email_to_args(
+            email, username_pull_args)
+        # pull the username
+        if isinstance(username_pull_function, str):
+            if username_pull_function.lower() == 'bigquery':
+                db = BQTools()
+                indicator, value = db.pull_username(**username_pull_args)
             else:
-                raise CredentialsError('password')
+                indicator, value = (
+                    'dev_error',
+                    "The username_pull_function method is not recognized. "
+                    "The available options are: 'bigquery' or a callable "
+                    "function.")
+        else:
+            indicator, value = username_pull_function(**username_pull_args)
 
-    def _set_random_password(self, username: str) -> str:
-        """
-        Updates credentials dictionary with user's hashed random password.
-
-        Parameters
-        ----------
-        username: str
-            Username of user to set random password for.
-        Returns
-        -------
-        str
-            New plain text password that should be transferred to user securely.
-        """
-        self.random_password = generate_random_pw()
-        self.credentials['usernames'][username]['password'] = Hasher([self.random_password]).generate()[0]
-        return self.random_password
-
-    def forgot_password(self, form_name: str, location: str='main') -> tuple:
-        """
-        Creates a forgot password widget.
-
-        Parameters
-        ----------
-        form_name: str
-            The rendered name of the forgot password form.
-        location: str
-            The location of the forgot password form i.e. main or sidebar.
-        Returns
-        -------
-        str
-            Username associated with forgotten password.
-        str
-            Email associated with forgotten password.
-        str
-            New plain text password that should be transferred to user securely.
-        """
-        if location not in ['main', 'sidebar']:
-            raise ValueError("Location must be one of 'main' or 'sidebar'")
-        if location == 'main':
-            forgot_password_form = st.form('Forgot password')
-        elif location == 'sidebar':
-            forgot_password_form = st.sidebar.form('Forgot password')
-
-        forgot_password_form.subheader(form_name)
-        username = forgot_password_form.text_input('Username').lower()
-
-        if forgot_password_form.form_submit_button('Submit'):
-            if len(username) > 0:
-                if username in self.credentials['usernames']:
-                    return username, self.credentials['usernames'][username]['email'], self._set_random_password(username)
-                else:
-                    return False, None, None
-            else:
-                raise ForgotError('Username not provided')
-        return None, None, None
-
-    def _get_username(self, key: str, value: str) -> str:
-        """
-        Retrieves username based on a provided entry.
-
-        Parameters
-        ----------
-        key: str
-            Name of the credential to query i.e. "email".
-        value: str
-            Value of the queried credential i.e. "jsmith@gmail.com".
-        Returns
-        -------
-        str
-            Username associated with given key, value pair i.e. "jsmith".
-        """
-        for username, entries in self.credentials['usernames'].items():
-            if entries[key] == value:
-                return username
+        # only continue if we didn't have any issues getting the username
+        if self._username_pull_error_handler(indicator, value):
+            return value
         return False
 
-    def forgot_username(self, form_name: str, location: str='main') -> tuple:
+    def _get_username(
+            self,
+            email_text_key: str,
+            username_pull_function: Union[str, Callable],
+            username_pull_args: dict = None,
+            email_user: Union[Callable, str] = None,
+            email_inputs: dict = None,
+            email_creds: dict = None) -> None:
         """
-        Creates a forgot username widget.
+        Checks the validity of the entered email and, if correct,
+        send the user the associated username.
 
-        Parameters
-        ----------
-        form_name: str
-            The rendered name of the forgot username form.
-        location: str
-            The location of the forgot username form i.e. main or sidebar.
-        Returns
-        -------
-        str
-            Forgotten username that should be transferred to user securely.
-        str
-            Email associated with forgotten username.
+        :param email_text_key: The st.session_state name used to access
+            the email.
+        :param username_pull_function: The function to pull the username
+            associated with the email. This can be a callable function
+            or a string. See the docstring for forgot_username for more
+            information.
+        :param username_pull_args: Arguments for the
+            username_pull_function. See the docstring for forgot_username
+            for more information.
+        :param email_user: Provide the method for email here, this can be
+            a callable function or a string. See forgot_username for more
+            details.
+        :param email_inputs: The inputs for the email sending process.
+            See forgot_username for more details.
+        :param email_creds: The credentials to use for the email API. See
+            forgot_username for more details.
         """
-        if location not in ['main', 'sidebar']:
-            raise ValueError("Location must be one of 'main' or 'sidebar'")
-        if location == 'main':
-            forgot_username_form = st.form('Forgot username')
-        elif location == 'sidebar':
-            forgot_username_form = st.sidebar.form('Forgot username')
+        email = st.session_state[email_text_key]
 
-        forgot_username_form.subheader(form_name)
-        email = forgot_username_form.text_input('Email')
+        # make sure the email isn't blank
+        if self._check_email_info(email):
+            username = self._pull_username(email, username_pull_function,
+                                           username_pull_args)
+            # username will only be non-False if the username was pulled
+            if username:
+                self._send_user_email(
+                    'forgot_username', email_inputs, username,
+                    email, email_user, email_creds)
 
-        if forgot_username_form.form_submit_button('Submit'):
-            if len(email) > 0:
-                return self._get_username('email', email), email
-            else:
-                raise ForgotError('Email not provided')
-        return None, email
-
-    def _update_entry(self, username: str, key: str, value: str):
+    def forgot_username(
+            self,
+            location: str = 'main',
+            expander: bool = False,
+            email_text_key: str = 'forgot_username_email',
+            username_pull_function: Union[str, Callable] = None,
+            username_pull_args: dict = None,
+            email_user: Union[Callable, str] = None,
+            email_inputs: dict = None,
+            email_creds: dict = None) -> None:
         """
-        Updates credentials dictionary with user's updated entry.
+        Creates a forgot username form.
 
-        Parameters
-        ----------
-        username: str
-            The username of the user to update the entry for.
-        key: str
-            The updated entry key i.e. "email".
-        value: str
-            The updated entry value i.e. "jsmith@gmail.com".
+        :param location: The location of the login form i.e. main or
+            sidebar.
+        :param expander: Whether to put the forgot username form in an
+            expander.
+        :param email_text_key: The key for the email text field. We
+            attempt to default to a unique key, but you can put your own
+            in here if you want to customize it or have clashes with other
+            keys.
+        :param username_pull_function: The function to pull the
+            username associated with the email. This can be a callable
+            function or a string.
+
+            At a minimum, a callable function should take 'email' as
+            an argument, but can include other arguments as well.
+            A callable function should return:
+             - A tuple of an indicator and a value
+             - The indicator should be either 'dev_error' or 'success'
+             - The value should be a string that contains the error
+                message when the indicator is 'dev_error' and the username
+                when the indicator is 'success'
+
+            The current pre-defined function types are:
+                'bigquery': Pulls the username from a BigQuery table.
+        :param username_pull_args: Arguments for the
+            username_pull_function. This should not include 'email'
+            since that will automatically be added here based on the
+            user's input.
+
+            If using 'bigquery' as your username_pull_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails.
+            username_col (str): The name of the column in the BigQuery
+                table that contains the usernames.
+        :param email_user:  Provide the method for email here, this can be
+            a callable function or a string. The function can also return
+            an error message as a string, which will be handled by the
+            error handler.
+
+            The current pre-defined function types are:
+
+            "gmail": the user wants to use their Gmail account to send
+                the email and must have the gmail API enabled. Note that
+                this only works for local / desktop apps. If using this
+                method, you must supply the
+                oauth2_credentials_secrets_dict variable and
+                optionally the oauth2_credentials_token_file_name
+                variable, as parts of the gmail_creds input.
+                https://developers.google.com/gmail/api/guides
+            "sendgrid": the user wants to use the SendGrid API to send
+                the email. Note that you must have signed up for a
+                SendGrid account and have an API key. If using this
+                method, you must supply the API key as the sendgrid_creds
+                input here.
+        :param email_inputs: The inputs for the email sending process.
+            These are generic for any email method and currently include:
+
+            website_name (str): The name of the website where the
+                registration is happening.
+            website_email (str) : The email that is sending the
+                registration confirmation.
+        :param email_creds: The credentials to use for the email API. Only
+            necessary if email_user is not None.
+
+            If email_user = 'gmail':
+                oauth2_credentials_secrets_dict (dict): The dictionary of
+                    the client secrets. Note that putting the secrets file
+                    in the same directory as the script is not secure.
+                oauth2_credentials_token_file_name (str): Optional. The
+                    name of the file to store the token, so it is not
+                    necessary to reauthenticate every time. If left out,
+                    it will default to 'token.json'.
+            If email_user = 'sendgrid':
+                sendgrid_api_key (str): The API key for the SendGrid API.
+                    Note that it should be stored separately in a secure
+                    location, such as a Google Cloud Datastore or
+                    encrypted in your project's pyproject.toml file.
+
+                    Example code to get the credentials in Google Cloud
+                        DataStore (you must install google-cloud-datastore
+                        in your environment):
+                        from google.cloud import datastore
+                        # you can also specify the project and/or database
+                        # in Client() below
+                        # you might also need credentials to connect to
+                        # the client if not run on Google App Engine (or
+                        # another service that recognizes the credentials
+                        # automatically)
+                        client = datastore.Client()
+                        # replace "apikeys" with the kind you set up in
+                        # datastore
+                        docs = list(client.query(kind="apikeys").fetch())
+                        # replace "sendgridapikey" with the name of the
+                        # key you set up in datastore
+                        api_key = docs[0]["sendgridapikey"]
+            Otherwise, these must be defined by the user in the callable
+            function and will likely include credentials to the email
+            service.
         """
-        self.credentials['usernames'][username][key] = value
+        # check whether the inputs are within the correct set of options
+        if not self._check_forgot_username_inputs(location):
+            return False
 
-    def update_user_details(self, username: str, form_name: str, location: str='main') -> bool:
-        """
-        Creates a update user details widget.
+        if location == 'main' and expander:
+            with st.expander('Forgot Username'):
+                forgot_username_form = st.form('Forgot Username')
+        elif location == 'main':
+            forgot_username_form = st.form('Forgot Username')
+        elif location == 'sidebar' and expander:
+            with st.sidebar.expander('Forgot Username'):
+                forgot_username_form = st.form('Forgot Username')
+        else:
+            forgot_username_form = st.sidebar.form('Forgot Username')
 
-        Parameters
-        ----------
-        username: str
-            The username of the user to update user details for.
-        form_name: str
-            The rendered name of the update user details form.
-        location: str
-            The location of the update user details form i.e. main or sidebar.
-        Returns
-        -------
-        str
-            The status of updating user details.
-        """
-        if location not in ['main', 'sidebar']:
-            raise ValueError("Location must be one of 'main' or 'sidebar'")
-        if location == 'main':
-            update_user_details_form = st.form('Update user details')
-        elif location == 'sidebar':
-            update_user_details_form = st.sidebar.form('Update user details')
-        
-        update_user_details_form.subheader(form_name)
-        self.username = username.lower()
-        field = update_user_details_form.selectbox('Field', ['Name', 'Email']).lower()
-        new_value = update_user_details_form.text_input('New value')
+        # we need a key for email so it can be accessed in the callback
+        # through session_state (such as st.session_state[
+        # 'forgot_username_email'])
+        email = forgot_username_form.text_input(
+            'Email', key=email_text_key).lower()
+        forgot_username_form.write("If the email exists in our system, "
+                                   "we will send you the associated username.")
 
-        if update_user_details_form.form_submit_button('Update'):
-            if len(new_value) > 0:
-                if new_value != self.credentials['usernames'][self.username][field]:
-                    self._update_entry(self.username, field, new_value)
-                    if field == 'name':
-                            st.session_state['name'] = new_value
-                            self.exp_date = self._set_exp_date()
-                            self.token = self._token_encode()
-                            self.cookie_manager.set(self.cookie_name, self.token,
-                            expires_at=datetime.now() + timedelta(days=self.cookie_expiry_days))
-                    return True
-                else:
-                    raise UpdateError('New and current values are the same')
-            if len(new_value) == 0:
-                raise UpdateError('New value not provided')
+        forgot_username_form.form_submit_button(
+            'Get Username', on_click=self._get_username,
+            args=(email_text_key, username_pull_function, username_pull_args,
+                  email_user, email_inputs, email_creds))

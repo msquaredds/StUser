@@ -475,3 +475,55 @@ class BQTools(object):
             data_series = df[datetime_col]
 
         return ('success', data_series)
+
+    def pull_username(
+            self,
+            bq_creds: dict,
+            project: str,
+            dataset: str,
+            table_name: str,
+            email_col: str,
+            email: str,
+            username_col: str) -> Tuple[str, str]:
+        """
+        Pull a username from BigQuery.
+
+        :param bq_creds: The credentials to access the BigQuery project.
+            These should, at a minimum, have the roles of "BigQuery Data
+            Editor", "BigQuery Read Session User" and "BigQuery Job User".
+        :param project: The project to pull the data from.
+        :param dataset: The dataset to pull the data from.
+        :param table_name: The table to pull the data from.
+        :param email_col: The column that holds the emails.
+        :param email: The email to match.
+        :param username_col: The column that holds the usernames to pull.
+        :return: A tuple with an indicator labeling the result as either
+            'success' or 'error', and the username if successful or the
+            error message if not.
+        """
+        # connect to the database
+        client = self._setup_connection(bq_creds)
+        if isinstance(client, str):
+            # in this case the "client" is an error message
+            return ('dev_error', client)
+
+        # create the query
+        table_id = project + "." + dataset + "." + table_name
+        sql_statement = (f"SELECT {username_col} FROM {table_id} "
+                         f"WHERE {email_col} = '{email}'")
+
+        # run the query
+        query_result = self._run_query(client, sql_statement)
+        if isinstance(query_result, tuple):
+            return query_result
+
+        # create the df pull the first value
+        df = query_result.to_dataframe()
+        try:
+            username = df.iloc[0, 0]
+        except Exception as e:
+            # we don't have a message here because this is handled by the
+            # calling function
+            return ('user_error', None)
+
+        return ('success', username)
