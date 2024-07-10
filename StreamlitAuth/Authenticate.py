@@ -2215,6 +2215,7 @@ class Authenticate(object):
             username = self._pull_username(email, username_pull_function,
                                            username_pull_args)
             st.write("username", username)
+            st.stop()
             # username will only be non-False if the username was pulled
             if username:
                 self._send_user_email(
