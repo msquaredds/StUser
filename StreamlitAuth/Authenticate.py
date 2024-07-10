@@ -2106,6 +2106,9 @@ class Authenticate(object):
                 "Error: " + value)
             return False
         elif indicator == 'user_error':
+            # at this point, the pull worked but no users matched, so
+            # clear any errors
+            eh.clear_errors()
             return False
         return True
 
