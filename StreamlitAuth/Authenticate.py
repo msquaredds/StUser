@@ -2072,7 +2072,7 @@ class Authenticate(object):
         """
         if location not in ['main', 'sidebar']:
             eh.add_dev_error(
-                'logout',
+                'forgot_username',
                 "location argument must be one of 'main' or 'sidebar'")
             return False
         return True
