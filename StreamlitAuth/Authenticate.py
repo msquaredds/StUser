@@ -267,8 +267,8 @@ class Authenticate(object):
         elif message_type == 'forgot_username':
             return f"""{website_name}: Your Username"""
 
-    def _get_message_body(self, message_type: str,
-                          website_name: str, username: str) -> str:
+    def _get_message_body(self, message_type: str, website_name: str,
+                          username: str, website_email: str) -> str:
         if message_type == 'register_user':
             message_body = \
                 (f"""Thank you for registering for {website_name}!\n
@@ -375,7 +375,8 @@ class Authenticate(object):
             subject = self._get_message_subject(
                 message_type, email_inputs['website_name'])
             body = self._get_message_body(
-                message_type, email_inputs['website_name'], username)
+                message_type, email_inputs['website_name'], username,
+                email_inputs['website_email'])
             email_handler = Email(user_email, subject, body, **email_inputs)
             if isinstance(email_user, str):
                 if email_user.lower() == 'gmail':
