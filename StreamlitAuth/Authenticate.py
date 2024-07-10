@@ -9,6 +9,7 @@ from StreamlitAuth.BQTools import BQTools
 from StreamlitAuth.Email import Email
 from StreamlitAuth.Encryptor import GenericEncryptor, GoogleEncryptor
 from StreamlitAuth.Hasher import Hasher
+from StreamlitAuth.Validator import Validator
 
 
 class Authenticate(object):
@@ -2345,11 +2346,13 @@ class Authenticate(object):
                 forgot_username_form = st.form('Forgot Username')
         elif location == 'main':
             forgot_username_form = st.form('Forgot Username')
+            forgot_username_form.subheader('Forgot Username')
         elif location == 'sidebar' and expander:
             with st.sidebar.expander('Forgot Username'):
                 forgot_username_form = st.form('Forgot Username')
         else:
             forgot_username_form = st.sidebar.form('Forgot Username')
+            forgot_username_form.subheader('Forgot Username')
 
         # we need a key for email so it can be accessed in the callback
         # through session_state (such as st.session_state[
