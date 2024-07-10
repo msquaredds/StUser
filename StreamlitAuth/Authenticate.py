@@ -320,13 +320,13 @@ class Authenticate(object):
             return False
         return True
 
-    def _email_error_handler(self, error: str) -> bool:
+    def _email_error_handler(self, message_type: str, error: str) -> bool:
         """
         Records any errors from the email sending process.
         """
         if error is not None:
             eh.add_dev_error(
-                'register_user',
+                message_type,
                 "There was an error sending the confirmation email. "
                 "Error: " + error)
             return False
@@ -392,7 +392,7 @@ class Authenticate(object):
                              "'sendgrid'.")
             else:
                 error = email_user(**email_creds)
-            if self._email_error_handler(error):
+            if self._email_error_handler(message_type, error):
                 eh.clear_errors()
 
     def _check_and_register_user(
@@ -2170,6 +2170,9 @@ class Authenticate(object):
                     "function.")
         else:
             indicator, value = username_pull_function(**username_pull_args)
+
+        st.write("indicator", indicator)
+        st.write("value", value)
 
         # only continue if we didn't have any issues getting the username
         if self._username_pull_error_handler(indicator, value):
