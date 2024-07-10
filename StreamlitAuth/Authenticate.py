@@ -2174,9 +2174,6 @@ class Authenticate(object):
         else:
             indicator, value = username_pull_function(**username_pull_args)
 
-        st.write("indicator", indicator)
-        st.write("value", value)
-
         # only continue if we didn't have any issues getting the username
         if self._username_pull_error_handler(indicator, value):
             return value
@@ -2217,8 +2214,6 @@ class Authenticate(object):
         if self._check_email_info(email):
             username = self._pull_username(email, username_pull_function,
                                            username_pull_args)
-            st.write("username", username)
-            st.stop()
             # username will only be non-False if the username was pulled
             if username:
                 self._send_user_email(
