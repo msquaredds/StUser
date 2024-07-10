@@ -115,11 +115,11 @@ class Email(object):
 
             message = EmailMessage()
 
-            message.set_content(self.message_body)
+            message.set_content(self.body)
 
             message["To"] = self.email
             message["From"] = self.website_email
-            message["Subject"] = self.message_subject
+            message["Subject"] = self.subject
 
             # encoded message
             encoded_message = base64.urlsafe_b64encode(
@@ -153,8 +153,8 @@ class Email(object):
         message = Mail(
             from_email=self.website_email,
             to_emails=self.email,
-            subject=self.message_subject,
-            html_content=self.message_body)
+            subject=self.subject,
+            html_content=self.body)
 
         try:
             sg = SendGridAPIClient(sendgrid_api_key)
