@@ -527,3 +527,52 @@ class BQTools(object):
             return ('user_error', None)
 
         return ('success', username)
+
+    def update_password(
+            self,
+            bq_creds: dict,
+            project: str,
+            dataset: str,
+            table_name: str,
+            email_col: str,
+            email: str,
+            username_col: str,
+            username: str,
+            password_col: str,
+            password: str) -> Tuple[str, str]:
+        """
+        Update a password from BigQuery based on email and username.
+
+        :param bq_creds: The credentials to access the BigQuery project.
+            These should, at a minimum, have the roles of "BigQuery Data
+            Editor", "BigQuery Read Session User" and "BigQuery Job User".
+        :param project: The project to pull the data from.
+        :param dataset: The dataset to pull the data from.
+        :param table_name: The table to pull the data from.
+        :param email_col: The column that holds the emails to match.
+        :param email: The email to match.
+        :param username_col: The column that holds the usernames match.
+        :param username: The username to match.
+        :param password_col: The column that holds the passwords, where
+            we will update.
+        :param password: The password to store.
+        :return: If there's an error, returns a tuple with 'dev_error' as
+            the first value and the error message as the second value.
+        """
+        # connect to the database
+        client = self._setup_connection(bq_creds)
+        if isinstance(client, str):
+            # in this case the "client" is an error message
+            return ('dev_error', client)
+
+        # create the query
+        table_id = project + "." + dataset + "." + table_name
+        sql_statement = (f"UPDATE {table_id} "
+                         f"SET {password_col} = {password} "
+                         f"WHERE {email_col} = '{email}' "
+                         f"AND {username_col} = '{username}'")
+
+        # run the query
+        query_result = self._run_query(client, sql_statement)
+        if isinstance(query_result, tuple):
+            return query_result

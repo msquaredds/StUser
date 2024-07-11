@@ -2355,6 +2355,49 @@ class Authenticate(object):
             password = secrets.token_urlsafe()
         return password
 
+    def _add_inputs_password_update(
+            self, password_store_args: dict, email: str, username: str,
+            password: str) -> dict:
+        if password_store_args is None:
+            password_store_args = {}
+        # add the inputs to password_store_args
+        password_store_args['email'] = email
+        password_store_args['username'] = username
+        password_store_args['password'] = password
+        return password_store_args
+
+    def _update_password(self, password_store_function: Union[Callable, str],
+                         password_store_args: dict, email: str,
+                         username: str, password: str) -> Union[None, str]:
+        """Update password for the given email and username."""
+        # first, add the email, username and password to the args
+        password_store_args = self._add_inputs_password_update(
+            password_store_args, email, username, password)
+        if isinstance(password_store_function, str):
+            if password_store_function.lower() == 'bigquery':
+                db = BQTools()
+                error = db.update_password(**password_store_args)
+            else:
+                error = (
+                    "The password_store_function method is not recognized. "
+                    "The available options are: 'bigquery' or a "
+                    "callable function.")
+        else:
+            error = password_store_function(**password_store_args)
+        return error
+
+    def _password_update_error_handler(self, error: str) -> bool:
+        """
+        Records any errors from the password update process.
+        """
+        if error is not None:
+            eh.add_dev_error(
+                'forgot_password',
+                "There was an error updating the password. "
+                "Error: " + error)
+            return False
+        return True
+
     def _get_password(
             self,
             email_text_key: str,
@@ -2415,13 +2458,24 @@ class Authenticate(object):
                 # SEND EMAIL - UPDATE THE EXISTING FUNCTION BELOW
                 ##########################################################
                 password = self._generate_random_password()
+                # hash password for storage
+                hashed_password = Hasher([password]).generate()[0]
 
                 st.write("password", password)
+                st.write("hashed_password", hashed_password)
                 st.stop()
 
-                self._send_user_email(
-                    'forgot_username', email_inputs, username,
-                    email, email_user, email_creds)
+                error = self._update_password(
+                    password_store_function, password_store_args, email,
+                    username, hashed_password)
+                if self._password_update_error_handler(error):
+                    ##########################################################
+                    # NEED TO UPDATE THIS EMAIL FUNCTION TO HANDLE
+                    # forgot_password
+                    ##########################################################
+                    self._send_user_email(
+                        'forgot_username', email_inputs, username,
+                        email, email_user, email_creds)
 
     def forgot_password(
             self,
