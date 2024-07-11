@@ -2347,6 +2347,14 @@ class Authenticate(object):
             return False
         return True
 
+    def _generate_random_password(self) -> str:
+        """Generate a random password."""
+        password = ''
+        validator = Validator()
+        while not validator.validate_password(password, self.weak_passwords):
+            password = secrets.token_urlsafe()
+        return password
+
     def _get_password(
             self,
             email_text_key: str,
@@ -2406,6 +2414,10 @@ class Authenticate(object):
                 # STORE PASSWORD
                 # SEND EMAIL - UPDATE THE EXISTING FUNCTION BELOW
                 ##########################################################
+                password = self._generate_random_password()
+
+                st.write("password", password)
+                st.stop()
 
                 self._send_user_email(
                     'forgot_username', email_inputs, username,
