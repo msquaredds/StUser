@@ -539,7 +539,8 @@ class BQTools(object):
             username_col: str,
             username: str,
             password_col: str,
-            password: str) -> Tuple[str, str]:
+            password: str,
+            datetime_col: str) -> Tuple[str, str]:
         """
         Update a password from BigQuery based on email and username.
 
@@ -556,6 +557,8 @@ class BQTools(object):
         :param password_col: The column that holds the passwords, where
             we will update.
         :param password: The password to store.
+        :param datetime_col: The column that holds the datetime, where we
+            will update.
         :return: If there's an error, returns a tuple with 'dev_error' as
             the first value and the error message as the second value.
         """
@@ -572,7 +575,7 @@ class BQTools(object):
         table_id = project + "." + dataset + "." + table_name
         sql_statement = (f"UPDATE {table_id} "
                          f"SET {password_col} = {password}, "
-                         f"datetime = {new_datetime} "
+                         f"{datetime_col} = {new_datetime} "
                          f"WHERE {email_col} = '{email}' "
                          f"AND {username_col} = '{username}'")
 

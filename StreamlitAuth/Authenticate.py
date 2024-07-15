@@ -2617,6 +2617,9 @@ class Authenticate(object):
                 table that contains the passwords. The password associated
                 with the given email and username will be overwritten with
                 the new password.
+            datetime_col (str): The name of the column in the BigQuery
+                table that contains the datetime. This is used to track
+                when the password was updated.
         :param email_user:  Provide the method for email here, this can be
             a callable function or a string. The function can also return
             an error message as a string, which will be handled by the
