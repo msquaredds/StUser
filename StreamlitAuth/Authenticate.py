@@ -2575,13 +2575,10 @@ class Authenticate(object):
             At a minimum, a callable function should take 'password' as
             an argument, as well as 'email' and 'username' since we can
             match against those.
-            A callable function should return:
-             - A tuple of an indicator and a value
-             - The indicator should be 'dev_error'
-             - The value should be a string that contains the error
-                message
+            A callable function can return an error message.
              - If the password was successfully updated, the function
-                should return None
+                should return None, as we don't want to give users too
+                much info here.
 
             The current pre-defined function types are:
                 'bigquery': Saves the credentials to a BigQuery table.

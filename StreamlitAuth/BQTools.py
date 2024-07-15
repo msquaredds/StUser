@@ -566,7 +566,7 @@ class BQTools(object):
         client = self._setup_connection(bq_creds)
         if isinstance(client, str):
             # in this case the "client" is an error message
-            return ('dev_error', client)
+            return client
 
         # get the datetime to update that as well
         new_datetime = pd.to_datetime('now', utc=True)
@@ -582,4 +582,4 @@ class BQTools(object):
         # run the query
         query_result = self._run_query(client, sql_statement)
         if isinstance(query_result, tuple):
-            return query_result
+            return query_result[1]
