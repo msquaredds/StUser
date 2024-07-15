@@ -565,10 +565,14 @@ class BQTools(object):
             # in this case the "client" is an error message
             return ('dev_error', client)
 
+        # get the datetime to update that as well
+        new_datetime = pd.to_datetime('now', utc=True)
+
         # create the query
         table_id = project + "." + dataset + "." + table_name
         sql_statement = (f"UPDATE {table_id} "
-                         f"SET {password_col} = {password} "
+                         f"SET {password_col} = {password}, "
+                         f"datetime = {new_datetime} "
                          f"WHERE {email_col} = '{email}' "
                          f"AND {username_col} = '{username}'")
 
