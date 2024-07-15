@@ -266,9 +266,12 @@ class Authenticate(object):
             return f"""{website_name}: Thank You for Registering"""
         elif message_type == 'forgot_username':
             return f"""{website_name}: Your Username"""
+        elif message_type == 'forgot_password':
+            return f"""{website_name}: Your Password Reset"""
 
     def _get_message_body(self, message_type: str, website_name: str,
-                          username: str, website_email: str) -> str:
+                          username: str, website_email: str = None,
+                          password: str = None) -> str:
         if message_type == 'register_user':
             message_body = \
                 (f"""Thank you for registering for {website_name}!\n
@@ -282,6 +285,12 @@ class Authenticate(object):
                  Your username is: {username}.\n
                  If you did not request your username or you have any
                  questions, please contact us at {website_email}.""")
+        elif message_type == 'forgot_password':
+            message_body = \
+                (f"""You requested a password reset for {website_name}.\n
+                 Your new password is: {password}.\n
+                 If you did not request a password reset or you have any
+                 questions, please contact us at {website_email}.""")
         return message_body
 
     def _check_email_type(self, message_type: str) -> bool:
@@ -290,11 +299,13 @@ class Authenticate(object):
         correct set of options.
         """
         if not isinstance(message_type, str) or \
-                message_type not in ['register_user', 'forgot_username']:
+                message_type not in ['register_user', 'forgot_username',
+                                     'forgot_password']:
             eh.add_dev_error(
                 message_type,
                 "The message_type is not recognized. The available "
-                "options are: 'register_user' or 'forgot_username'.")
+                "options are: 'register_user','forgot_username' "
+                "or 'forgot_password'.")
             return False
         return True
 
@@ -327,21 +338,22 @@ class Authenticate(object):
         if error is not None:
             eh.add_dev_error(
                 message_type,
-                "There was an error sending the confirmation email. "
+                "There was an error sending the email. "
                 "Error: " + error)
             return False
         return True
 
     def _send_user_email(
-            self, message_type: str, email_inputs: dict, username: str,
+            self, message_type: str, email_inputs: dict,
             user_email: str, email_user: Union[callable, str],
-            email_creds: dict = None) -> None:
+            email_creds: dict = None,  username: str = None,
+            password: str = None) -> None:
         """
         Send an email to the user. Can be used for user registration or
         a forgotten username or password.
 
         :param message_type: The type of message we are sending. Can be
-            'register_user' or 'forgot_username'.
+            'register_user', 'forgot_username' or 'forgot_password'.
         :param email_inputs: The inputs for the email sending process.
             These are generic for any email method and currently include:
 
@@ -369,6 +381,8 @@ class Authenticate(object):
         :param email_creds: The credentials to use for the email API. Only
             necessary if email_user is not None. See the
             docstring for register_user for more information.
+        :param password: The user's password. Only necessary if
+            message_type is 'forgot_password'.
         """
         if (self._check_email_inputs(**email_inputs) and
                 self._check_email_type(message_type)):
@@ -376,7 +390,7 @@ class Authenticate(object):
                 message_type, email_inputs['website_name'])
             body = self._get_message_body(
                 message_type, email_inputs['website_name'], username,
-                email_inputs['website_email'])
+                email_inputs['website_email'], password)
             email_handler = Email(user_email, subject, body, **email_inputs)
             if isinstance(email_user, str):
                 if email_user.lower() == 'gmail':
@@ -469,14 +483,14 @@ class Authenticate(object):
                 if self._cred_save_error_handler(error):
                     if email_user is not None:
                         self._send_user_email(
-                            'register_user', email_inputs, new_username,
-                            new_email, email_user, email_creds)
+                            'register_user', email_inputs,
+                            new_email, email_user, email_creds, new_username)
                     else:
                         eh.clear_errors()
             elif email_user is not None:
                 self._send_user_email(
-                    'register_user', email_inputs, new_username,
-                    new_email, email_user, email_creds)
+                    'register_user', email_inputs, new_email,
+                    email_user, email_creds, new_username)
             else:
                 # get rid of any errors, since we have successfully
                 # registered
@@ -2182,8 +2196,8 @@ class Authenticate(object):
             # username will only be non-False if the username was pulled
             if username:
                 self._send_user_email(
-                    'forgot_username', email_inputs, username,
-                    email, email_user, email_creds)
+                    'forgot_username', email_inputs, email,
+                    email_user, email_creds, username)
 
     def forgot_username(
             self,
@@ -2450,32 +2464,43 @@ class Authenticate(object):
             pulled_username = self._pull_username(
                 email, 'forgot_password', username_pull_function,
                 username_pull_args)
+            st.write("pulled_username", pulled_username)
             # username will only be non-False if the username was pulled
             if pulled_username and pulled_username == username:
-                ##########################################################
-                # CREATE NEW PASSWORD
-                # STORE PASSWORD
-                # SEND EMAIL - UPDATE THE EXISTING FUNCTION BELOW
-                ##########################################################
                 password = self._generate_random_password()
                 # hash password for storage
                 hashed_password = Hasher([password]).generate()[0]
+
+                # store the new credentials in case these are needed
+                # outside of this function
+                st.session_state[self.user_credentials_session_state] = {
+                    'username': username,
+                    'email': email,
+                    'password': hashed_password}
 
                 st.write("password", password)
                 st.write("hashed_password", hashed_password)
                 st.stop()
 
-                error = self._update_password(
-                    password_store_function, password_store_args, email,
-                    username, hashed_password)
-                if self._password_update_error_handler(error):
-                    ##########################################################
-                    # NEED TO UPDATE THIS EMAIL FUNCTION TO HANDLE
-                    # forgot_password
-                    ##########################################################
+                if password_store_function is not None:
+                    error = self._update_password(
+                        password_store_function, password_store_args, email,
+                        username, hashed_password)
+                    if self._password_update_error_handler(error):
+                        if email_user is not None:
+                            self._send_user_email(
+                                'forgot_password', email_inputs, email,
+                                email_user, email_creds, password=password)
+                        else:
+                            eh.clear_errors()
+                elif email_user is not None:
                     self._send_user_email(
-                        'forgot_username', email_inputs, username,
-                        email, email_user, email_creds)
+                        'forgot_password', email_inputs, email,
+                        email_user, email_creds, password=password)
+                else:
+                    # get rid of any errors, since we have successfully
+                    # updated the password
+                    eh.clear_errors()
 
     def forgot_password(
             self,
@@ -2546,6 +2571,28 @@ class Authenticate(object):
                 table that contains the emails.
             username_col (str): The name of the column in the BigQuery
                 table that contains the usernames.
+        :param password_store_function: The function to store the new
+            password associated with the email and username. This can be a
+            callable function or a string.
+
+            At a minimum, a callable function should take 'password' as
+            an argument, as well as 'email' and 'username' since we can
+            match against those.
+            A callable function should return:
+             - A tuple of an indicator and a value
+             - The indicator should be 'dev_error'
+             - The value should be a string that contains the error
+                message
+             - If the password was successfully updated, the function
+                should return None
+
+            The current pre-defined function types are:
+                'bigquery': Saves the credentials to a BigQuery table.
+
+            This is only necessary if you want to save the password to
+            a database or other storage location. This can be useful so
+            that you can confirm the password is saved during the
+            callback and handle that as necessary.
         :param password_store_args: Arguments for the cred_save_function.
             This should not include 'email', 'username' or 'password' as
             those will automatically be added here based on the user's
