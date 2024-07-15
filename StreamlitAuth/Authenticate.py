@@ -2479,10 +2479,6 @@ class Authenticate(object):
                     'email': email,
                     'password': hashed_password}
 
-                st.write("password", password)
-                st.write("hashed_password", hashed_password)
-                st.stop()
-
                 if password_store_function is not None:
                     error = self._update_password(
                         password_store_function, password_store_args, email,
