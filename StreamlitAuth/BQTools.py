@@ -579,9 +579,6 @@ class BQTools(object):
                          f"WHERE {email_col} = '{email}' "
                          f"AND {username_col} = '{username}'")
 
-        import streamlit as st
-        st.write("sql_statement", sql_statement)
-
         # run the query
         query_result = self._run_query(client, sql_statement)
         if isinstance(query_result, tuple):

@@ -2465,7 +2465,6 @@ class Authenticate(object):
             pulled_username = self._pull_username(
                 email, 'forgot_password', username_pull_function,
                 username_pull_args)
-            st.write("pulled_username", pulled_username)
             # username will only be non-False if the username was pulled
             if pulled_username and pulled_username == username:
                 password = self._generate_random_password()
