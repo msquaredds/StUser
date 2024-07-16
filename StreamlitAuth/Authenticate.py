@@ -2391,7 +2391,6 @@ class Authenticate(object):
         if isinstance(password_store_function, str):
             if password_store_function.lower() == 'bigquery':
                 db = BQTools()
-                st.write("password_store_args", password_store_args)
                 error = db.update_password(**password_store_args)
             else:
                 error = (

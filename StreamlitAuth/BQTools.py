@@ -574,8 +574,8 @@ class BQTools(object):
         # create the query
         table_id = project + "." + dataset + "." + table_name
         sql_statement = (f"UPDATE {table_id} "
-                         f"SET {password_col} = {password}, "
-                         f"{datetime_col} = {new_datetime} "
+                         f"SET {password_col} = '{password}', "
+                         f"{datetime_col} = '{new_datetime}' "
                          f"WHERE {email_col} = '{email}' "
                          f"AND {username_col} = '{username}'")
 
