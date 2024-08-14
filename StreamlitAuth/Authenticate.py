@@ -2710,3 +2710,304 @@ class Authenticate(object):
                   username_pull_function, username_pull_args,
                   password_store_function, password_store_args,
                   email_user, email_inputs, email_creds))
+
+    def _update_user_info(
+            self,
+            select_box_key: str,
+            user_info_text_key: str,
+            user_info_text_key_new: str,
+            user_info_text_key_new_repeat: str,
+            info_pull_function: Union[str, Callable],
+            info_pull_args: dict = None,
+            info_store_function: Union[str, Callable] = None,
+            info_store_args: dict = None,
+            email_user: Union[Callable, str] = None,
+            email_inputs: dict = None,
+            email_creds: dict = None) -> None:
+        """
+        Checks the validity of the entered email, username or password
+        and, if correct, stores the new email, username or password and
+        emails the user.
+
+        :param select_box_key: The st.session_state name used to access
+            the info type.
+        :param user_info_text_key: The st.session_state name used to
+            access the existing info (email or password, the username
+            is assumed to be in st.session_state.stauth['username'] since
+            the user should be logged in).
+        :param user_info_text_key_new: The st.session_state name used
+            to access the new email, username or password.
+        :param user_info_text_key_new_repeat: The st.session_state name
+            used to access the repeated new email, username or password.
+        :param info_pull_function: The function to pull the email or
+            password associated with the username. This can be a callable
+            function or a string. See the docstring for update_user_info
+            for more information.
+        :param info_pull_args: Arguments for the info_pull_function. See
+            the docstring for update_user_info for more information.
+        :param info_store_function: The function to store the new info.
+            This can be a callable function or a string. See the
+            docstring for update_user_info for more information.
+        :param info_store_args: Arguments for the info_store_function. See
+            the docstring for update_user_info for more information.
+        :param email_user: Provide the method for email here, this can be
+            a callable function or a string. See update_user_info for more
+            details.
+        :param email_inputs: The inputs for the email sending process.
+            See update_user_info for more details.
+        :param email_creds: The credentials to use for the email API. See
+            update_user_info for more details.
+        """
+        ###############################################################
+        # STOPPED HERE
+        ###############################################################
+
+        email = st.session_state[email_text_key]
+        username = st.session_state[username_text_key]
+        repeat_username = st.session_state[repeat_username_text_key]
+
+        # make sure the email and username aren't blank
+        if self._check_email_username_info(email, username, repeat_username):
+            pulled_username = self._pull_username(
+                email, 'forgot_password', username_pull_function,
+                username_pull_args)
+
+    def update_user_info(
+            self,
+            location: str = 'main',
+            select_box_key: str = 'update_user_info_selectbox',
+            user_info_text_key: str = 'update_user_info_text',
+            user_info_text_key_new: str = 'update_user_info_text_new',
+            user_info_text_key_new_repeat: str =
+                'update_user_info_text_new_repeat',
+            info_pull_function: Union[str, Callable] = None,
+            info_pull_args: dict = None,
+            info_store_function: Union[str, Callable] = None,
+            info_store_args: dict = None,
+            email_user: Union[Callable, str] = None,
+            email_inputs: dict = None,
+            email_creds: dict = None) -> None:
+        """
+        Creates an update user info form. This allows the user to change
+            their email, username or password.
+
+        :param location: The location of the login form i.e. main or
+            sidebar.
+        :param select_box_key: The key for the select box that allows the
+            user to choose what they want to update. We attempt to default
+            to a unique key, but you can put your own in here if you want
+            to customize it or have clashes with other keys.
+        :param user_info_text_key: The key for the first text field, which
+            is the existing email or password. We don't need the user to
+            input the existing username if changing that since we assume
+            the user is logged in and we can use the username from our
+            session state. We attempt to default to a unique key, but you
+            can put your own in here if you want to customize it or have
+            clashes with other keys.
+        :param user_info_text_key_new: The key for the second text field,
+            which is the new email, username or password. We attempt to
+            default to a unique key, but you can put your own in here if
+            you want to customize it or have clashes with other keys.
+        :param user_info_text_key_new_repeat: The key for the third text
+            field, which is a repeat of the new email, username or
+            password to confirm that it matches the second text field. We
+            attempt to default to a unique key, but you can put your own
+            in here if you want to customize it or have clashes with other
+            keys.
+        :param info_pull_function: The function to pull the email or
+            password associated with the logged-in username. This can be a
+            callable function or a string.
+
+            At a minimum, a callable function should take 'info' as
+            an argument, which is either 'email' or 'password' as the
+            type of data to pull. It should also take 'username' as that
+            is the uesrname we will match to. And it can include other
+            arguments as well.
+            A callable function should return:
+             - A tuple of an indicator and a value
+             - The indicator should be either 'dev_error', 'user_error' or
+                'success'
+             - The value should be a string that contains the error
+                message when the indicator is 'dev_error'  or 'user_error'
+                and the email or password when the indicator is 'success'.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls the info from a BigQuery table.
+        :param info_pull_args: Arguments for the
+            info_pull_function. This should not include 'info' or
+            'username' since those will automatically be added here based
+            on the user's inputs.
+
+            If using 'bigquery' as your info_pull_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails.
+            password_col (str): The name of the column in the BigQuery
+                table that contains the passwords.
+            username_col (str): The name of the column in the BigQuery
+                table that contains the usernames.
+        :param info_store_function: The function to store the new email,
+            username or password. This can be a callable function or a
+            string.
+
+            At a minimum, a callable function should take 'info' as
+            an argument, as well as 'type' so we know where to look
+            to update. For example, 'type' could be 'email', 'username'
+            or 'password' and then the function can handle accordingly.
+            A callable function can return an error message.
+             - If the info was successfully updated, the function
+                should return None, as we don't want to give users too
+                much info here.
+
+            The current pre-defined function types are:
+                'bigquery': Saves the info to a BigQuery table.
+        :param info_store_args: Arguments for the info_store_function.
+            This should not include 'info' or 'type' as
+            those will automatically be added here based on the user's
+            input. Instead, it should include things like database
+            name, table name, credentials to log into the database,
+            etc. That way they can be compiled in this function and passed
+            to the function in the callback.
+
+            If using 'bigquery' as your info_store_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            col_map (dict): A dictionary mapping the info types to the
+                associated column names in the database.
+                {'email': email_col,
+                 'username': username_col,
+                 'password': password_col,
+                 'datetime': datetime_col}
+                Note that we have datetime too since we need to record
+                when the info was updated.
+        :param email_user:  Provide the method for email here, this can be
+            a callable function or a string. The function can also return
+            an error message as a string, which will be handled by the
+            error handler.
+
+            The current pre-defined function types are:
+
+            "gmail": the user wants to use their Gmail account to send
+                the email and must have the gmail API enabled. Note that
+                this only works for local / desktop apps. If using this
+                method, you must supply the
+                oauth2_credentials_secrets_dict variable and
+                optionally the oauth2_credentials_token_file_name
+                variable, as parts of the gmail_creds input.
+                https://developers.google.com/gmail/api/guides
+            "sendgrid": the user wants to use the SendGrid API to send
+                the email. Note that you must have signed up for a
+                SendGrid account and have an API key. If using this
+                method, you must supply the API key as the sendgrid_creds
+                input here.
+        :param email_inputs: The inputs for the email sending process.
+            These are generic for any email method and currently include:
+
+            website_name (str): The name of the website where the
+                registration is happening.
+            website_email (str) : The email that is sending the
+                registration confirmation.
+        :param email_creds: The credentials to use for the email API. Only
+            necessary if email_user is not None.
+
+            If email_user = 'gmail':
+                oauth2_credentials_secrets_dict (dict): The dictionary of
+                    the client secrets. Note that putting the secrets file
+                    in the same directory as the script is not secure.
+                oauth2_credentials_token_file_name (str): Optional. The
+                    name of the file to store the token, so it is not
+                    necessary to reauthenticate every time. If left out,
+                    it will default to 'token.json'.
+            If email_user = 'sendgrid':
+                sendgrid_api_key (str): The API key for the SendGrid API.
+                    Note that it should be stored separately in a secure
+                    location, such as a Google Cloud Datastore or
+                    encrypted in your project's pyproject.toml file.
+
+                    Example code to get the credentials in Google Cloud
+                        DataStore (you must install google-cloud-datastore
+                        in your environment):
+                        from google.cloud import datastore
+                        # you can also specify the project and/or database
+                        # in Client() below
+                        # you might also need credentials to connect to
+                        # the client if not run on Google App Engine (or
+                        # another service that recognizes the credentials
+                        # automatically)
+                        client = datastore.Client()
+                        # replace "apikeys" with the kind you set up in
+                        # datastore
+                        docs = list(client.query(kind="apikeys").fetch())
+                        # replace "sendgridapikey" with the name of the
+                        # key you set up in datastore
+                        api_key = docs[0]["sendgridapikey"]
+            Otherwise, these must be defined by the user in the callable
+            function and will likely include credentials to the email
+            service.
+        """
+        # check whether the inputs are within the correct set of options
+        if not self._check_form_inputs(location, 'update_user_info'):
+            return False
+
+        if location == 'main':
+            update_user_info_form = st.form('Update User Info')
+        else:
+            update_user_info_form = st.sidebar.form('Update User Info')
+        update_user_info_form.subheader('Update User Info')
+
+        # we need a key for the info so they can be accessed in
+        # the callback through session_state (such as st.session_state[
+        # 'forgot_password_email'])
+        info_type = update_user_info_form.selectbox(
+            '', ['Email', 'Username', 'Password'], key=select_box_key,
+            label_visibility='collapsed')
+
+        if info_type == 'Email':
+            info_existing = update_user_info_form.text_input(
+                'Current Email', key=user_info_text_key).lower()
+            info_new = update_user_info_form.text_input(
+                'New Email', key=user_info_text_key_new).lower()
+            info_new_repeat = update_user_info_form.text_input(
+                'Repeat New Email', key=user_info_text_key_new_repeat).lower()
+        elif info_type == 'Username':
+            # we don't need the existing username here since it is stored
+            # in st.session_state.stauth['username'] once the user is
+            # logged in
+            info_new = update_user_info_form.text_input(
+                'New Username', key=user_info_text_key_new).lower()
+            info_new_repeat = update_user_info_form.text_input(
+                'Repeat New Username',
+                key=user_info_text_key_new_repeat).lower()
+        else:
+            info_existing = update_user_info_form.text_input(
+                'Current Password', key=user_info_text_key, type='password')
+            info_new = update_user_info_form.text_input(
+                'New Password', key=user_info_text_key_new, type='password')
+            info_new_repeat = update_user_info_form.text_input(
+                'Repeat New Password', key=user_info_text_key_new_repeat,
+                type='password')
+
+        update_user_info_form.form_submit_button(
+            'Update Info', on_click=self._update_user_info,
+            args=(select_box_key, user_info_text_key,
+                  user_info_text_key_new, user_info_text_key_new_repeat,
+                  info_pull_function, info_pull_args,
+                  info_store_function, info_store_args,
+                  email_user, email_inputs, email_creds))
