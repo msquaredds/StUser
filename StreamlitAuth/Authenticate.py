@@ -1046,7 +1046,7 @@ class Authenticate(object):
         if isinstance(password_pull_function, str):
             if password_pull_function.lower() == 'bigquery':
                 db = BQTools()
-                indicator, value = db.pull_password(
+                indicator, value = db.pull_value_based_on_other_col_value(
                     **password_pull_args)
             else:
                 indicator, value = (
@@ -2087,7 +2087,7 @@ class Authenticate(object):
             email: str,
             pull_type: str,
             username_pull_function: Union[str, Callable],
-            username_pull_args: dict = None) -> bool:
+            username_pull_args: dict = None) -> Union[bool, str]:
         """
         Pulls the username associated with the email.
 
@@ -2142,7 +2142,8 @@ class Authenticate(object):
         if isinstance(username_pull_function, str):
             if username_pull_function.lower() == 'bigquery':
                 db = BQTools()
-                indicator, value = db.pull_username(**username_pull_args)
+                indicator, value = db.pull_value_based_on_other_col_value(
+                    **username_pull_args)
             else:
                 indicator, value = (
                     'dev_error',
@@ -2371,27 +2372,45 @@ class Authenticate(object):
         return password
 
     def _add_inputs_password_update(
-            self, password_store_args: dict, email: str, username: str,
+            self, password_store_args: dict, username: str,
             password: str) -> dict:
         if password_store_args is None:
             password_store_args = {}
         # add the inputs to password_store_args
-        password_store_args['email'] = email
         password_store_args['username'] = username
         password_store_args['password'] = password
         return password_store_args
 
+    def _rename_password_store_args(self, password_store_args: dict) -> dict:
+        """Update the target and reference columns and reference value."""
+        password_store_args['reference_col'] = password_store_args[
+            'username_col']
+        password_store_args['reference_value'] = password_store_args[
+            'username']
+        password_store_args['target_col'] = password_store_args['password_col']
+        password_store_args['target_value'] = password_store_args['password']
+        password_store_args.remove('username_col')
+        password_store_args.remove('username')
+        password_store_args.remove('password_col')
+        password_store_args.remove('password')
+        return password_store_args
+
     def _update_password(self, password_store_function: Union[Callable, str],
-                         password_store_args: dict, email: str,
+                         password_store_args: dict,
                          username: str, password: str) -> Union[None, str]:
-        """Update password for the given email and username."""
-        # first, add the email, username and password to the args
+        """Update password for the given username."""
+        # first, add the username and password to the args
         password_store_args = self._add_inputs_password_update(
-            password_store_args, email, username, password)
+            password_store_args, username, password)
         if isinstance(password_store_function, str):
             if password_store_function.lower() == 'bigquery':
+                # update the password_store_args to the correct variable
+                # names
+                password_store_args = self._rename_password_store_args(
+                    password_store_args)
                 db = BQTools()
-                error = db.update_password(**password_store_args)
+                error = db.update_value_based_on_other_col_value(
+                    **password_store_args)
             else:
                 error = (
                     "The password_store_function method is not recognized. "
@@ -2480,7 +2499,7 @@ class Authenticate(object):
 
                 if password_store_function is not None:
                     error = self._update_password(
-                        password_store_function, password_store_args, email,
+                        password_store_function, password_store_args,
                         username, hashed_password)
                     if self._password_update_error_handler(error):
                         if email_user is not None:
@@ -2572,8 +2591,8 @@ class Authenticate(object):
             callable function or a string.
 
             At a minimum, a callable function should take 'password' as
-            an argument, as well as 'email' and 'username' since we can
-            match against those.
+            an argument, as well as 'username' since we can match against
+            that.
             A callable function can return an error message.
              - If the password was successfully updated, the function
                 should return None, as we don't want to give users too
@@ -2587,7 +2606,7 @@ class Authenticate(object):
             that you can confirm the password is saved during the
             callback and handle that as necessary.
         :param password_store_args: Arguments for the cred_save_function.
-            This should not include 'email', 'username' or 'password' as
+            This should not include 'username' or 'password' as
             those will automatically be added here based on the user's
             input. Instead, it should include things like database
             name, table name, credentials to log into the database,
@@ -2605,8 +2624,6 @@ class Authenticate(object):
             dataset (str): The name of the dataset in the BigQuery table.
             table_name (str): The name of the table in the BigQuery
                 dataset.
-            email_col (str): The name of the column in the BigQuery
-                table that contains the emails.
             username_col (str): The name of the column in the BigQuery
                 table that contains the usernames.
             password_col (str): The name of the column in the BigQuery
@@ -2711,6 +2728,206 @@ class Authenticate(object):
                   password_store_function, password_store_args,
                   email_user, email_inputs, email_creds))
 
+    def _check_user_info(self, info_type: str, info: str, new_info: str,
+                         repeat_new_info: str) -> bool:
+        """Check whether the info is filled in, and the new info
+            matches."""
+        if ((info_type == 'username' and
+                not (len(new_info) > 0 and len(repeat_new_info) > 0)) or
+                (info_type != 'username' and
+                 not (len(info) > 0 and len(new_info) > 0 and
+                      len(repeat_new_info) > 0))):
+            eh.add_user_error(
+                'update_user_info',
+                "Please enter all info.")
+            return False
+        if new_info != repeat_new_info:
+            eh.add_user_error(
+                'update_user_info',
+                "The new info does not match. Please try again.")
+            return False
+        return True
+
+    def _add_inputs_user_info_pull(
+            self, info_pull_args: dict, info_type: str, username: str) -> dict:
+        if info_pull_args is None:
+            info_pull_args = {}
+        # add the inputs to info_pull_args
+        info_pull_args['type'] = info_type
+        info_pull_args['username'] = username
+        return info_pull_args
+
+    def _rename_user_info_pull_args(self, info_pull_args: dict) -> dict:
+        """Based on the info we want to pull, update the target and
+            reference columns and reference value."""
+        info_pull_args['target_col'] = info_pull_args['col_map'][
+            info_pull_args['type']]
+        info_pull_args['reference_col'] = info_pull_args['col_map']['username']
+        info_pull_args['reference_value'] = info_pull_args['username']
+        info_pull_args.remove('type')
+        info_pull_args.remove('username')
+        info_pull_args.remove('col_map')
+        return info_pull_args
+
+    def _user_info_pull_error_handler(self, info_type: str, indicator: str,
+                                      value: str) -> bool:
+        """ Records any errors from the user info pulling process."""
+        if indicator in ('dev_error', 'user_error'):
+            # a user_error would only happen if there's no info (email or
+            # password) associated with the username, so this is really a
+            # dev error since that should never happen
+            eh.add_dev_error(
+                'update_user_info',
+                f"There was an error pulling the user's {info_type}. "
+                f"Error: " + value)
+            return False
+        return True
+
+    def _pull_user_info(
+            self,
+            info_type: str,
+            username: str,
+            info_pull_function: Union[str, Callable],
+            info_pull_args: dict = None) -> Union[bool, str]:
+        """
+        Pulls info (either email or password) associated with the
+        username.
+
+        :param info_type: The type of data we are pulling, either 'email'
+            or 'password'. This is used when defining the type of errors
+            we get.
+        :param username: The username to pull our info for.
+        :param info_pull_function: The function to pull the info
+            associated with the username. This can be a callable function
+            or a string.
+
+            At a minimum, a callable function should take 'email' as
+            an argument, but can include other arguments as well.
+            A callable function should return:
+             - A tuple of an indicator and a value
+             - The indicator should be either 'dev_error', 'user_error' or
+                'success'
+             - The value should be a string that contains the error
+                message when the indicator is 'dev_error' and the username
+                when the indicator is 'success'. The value associated with
+                'user_error' isn't used as that is the case when the
+                username does not exist in the system and we don't tell
+                the user that.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls the username from a BigQuery table.
+        :param info_pull_args: Arguments for the
+            info_pull_function. This should not include 'info' or
+            'username' since those will automatically be added here based
+            on the user's inputs.
+
+            If using 'bigquery' as your info_pull_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            col_map (dict): A dictionary mapping the info types to the
+                associated column names in the database.
+                {'email': email_col,
+                 'username': username_col,
+                 'password': password_col}
+        """
+        info_pull_args = self._add_inputs_user_info_pull(
+            info_pull_args, info_type, username)
+        # pull the info associated with the username
+        if isinstance(info_pull_function, str):
+            if info_pull_function.lower() == 'bigquery':
+                # update the info_pull_args based on the info_type
+                info_pull_args = self._rename_user_info_pull_args(
+                    info_type, info_pull_args)
+                db = BQTools()
+                indicator, value = db.pull_value_based_on_other_col_value(
+                    **info_pull_args)
+            else:
+                indicator, value = (
+                    'dev_error',
+                    "The info_pull_function method is not recognized. "
+                    "The available options are: 'bigquery' or a callable "
+                    "function.")
+        else:
+            indicator, value = info_pull_function(**info_pull_args)
+
+        # only continue if we didn't have any issues getting the info
+        if self._user_info_pull_error_handler(info_type, indicator, value):
+            return value
+        return False
+
+    def _check_info_match(self, pulled_info: str, info: str,
+                          info_type: str) -> bool:
+        """Check that the pulled info matches the info entered."""
+        if pulled_info and pulled_info == info:
+            return True
+        else:
+            eh.add_user_error(
+                'update_user_info',
+                f"The existing {info_type} does not match. "
+                f"Please try again.")
+            return False
+
+    def _add_inputs_user_info_update(
+            self, info_store_args: dict, info: str, info_type: str,
+            username: str) -> dict:
+        if info_store_args is None:
+            info_store_args = {}
+        # add the inputs to info_store_args
+        info_store_args['info'] = info
+        info_store_args['type'] = info_type
+        info_store_args['username'] = username
+        return info_store_args
+
+    def _rename_user_info_store_args(self, info_store_args: dict) -> dict:
+        """Update the target and reference columns and reference value."""
+        info_store_args['reference_col'] = info_store_args['col_map'][
+            'username']
+        info_store_args['reference_value'] = info_store_args[
+            'username']
+        info_store_args['target_col'] = info_store_args['col_map'][
+            info_store_args['type']]
+        info_store_args['target_value'] = info_store_args['info']
+        info_store_args['datetime_col'] = info_store_args['col_map'][
+            'datetime']
+        info_store_args.remove('info')
+        info_store_args.remove('type')
+        info_store_args.remove('username')
+        info_store_args.remove('col_map')
+        return info_store_args
+
+    def _update_stored_user_info(
+            self, info_store_function: Union[Callable, str],
+            info_store_args: dict, new_info: str,
+            info_type: str, username: str) -> Union[None, str]:
+        """Update user info (email or password) for the given username."""
+        # first, add the info and info_type to the args
+        info_store_args = self._add_inputs_user_info_update(
+            info_store_args, new_info, info_type, username)
+        if isinstance(info_store_function, str):
+            if info_store_function.lower() == 'bigquery':
+                # update the info_store_args to the correct variable names
+                info_store_args = self._rename_user_info_store_args(
+                    info_store_args)
+                db = BQTools()
+                error = db.update_value_based_on_other_col_value(
+                    **info_store_args)
+            else:
+                error = (
+                    "The info_store_function method is not recognized. "
+                    "The available options are: 'bigquery' or a "
+                    "callable function.")
+        else:
+            error = info_store_function(**info_store_args)
+        return error
+
     def _update_user_info(
             self,
             select_box_key: str,
@@ -2758,19 +2975,61 @@ class Authenticate(object):
         :param email_creds: The credentials to use for the email API. See
             update_user_info for more details.
         """
-        ###############################################################
-        # STOPPED HERE
-        ###############################################################
+        info_type = st.session_state[select_box_key]
+        # this doesn't exist for username, just email and password
+        if user_info_text_key in st.session_state:
+            info = st.session_state[user_info_text_key]
+        else:
+            info = None
+        new_info = st.session_state[user_info_text_key_new]
+        repeat_new_info = st.session_state[user_info_text_key_new_repeat]
+        username = st.session_state.stauth['username']
 
-        email = st.session_state[email_text_key]
-        username = st.session_state[username_text_key]
-        repeat_username = st.session_state[repeat_username_text_key]
+        # make sure the fields aren't blank
+        if self._check_user_info(info_type, info, new_info, repeat_new_info):
+            info_match = True
+            if info_type in ('email', 'password'):
+                pulled_info = self._pull_user_info(
+                    info_type, username, info_pull_function, info_pull_args)
+                if info_type == 'password':
+                    # all passwords must be hashed
+                    info = Hasher([info]).generate()[0]
+                    new_info = Hasher([new_info]).generate()[0]
+                info_match = self._check_info_match(pulled_info, info,
+                                                    info_type)
+            # only continue if the user's entered existing info matches
+            # what is stored
+            if info_match:
+                # store the new credentials in case they are needed
+                # outside of this function
+                st.session_state[self.user_credentials_session_state][
+                    info_type] = new_info
 
-        # make sure the email and username aren't blank
-        if self._check_email_username_info(email, username, repeat_username):
-            pulled_username = self._pull_username(
-                email, 'forgot_password', username_pull_function,
-                username_pull_args)
+                if info_store_function is not None:
+                    error = self._update_stored_user_info(
+                        info_store_function, info_store_args, new_info,
+                        info_type, username)
+
+                    ######################################################
+                    # STOPPED HERE
+                    ######################################################
+
+
+                    if self._password_update_error_handler(error):
+                        if email_user is not None:
+                            self._send_user_email(
+                                'forgot_password', email_inputs, email,
+                                email_user, email_creds, password=password)
+                        else:
+                            eh.clear_errors()
+                elif email_user is not None:
+                    self._send_user_email(
+                        'forgot_password', email_inputs, email,
+                        email_user, email_creds, password=password)
+                else:
+                    # get rid of any errors, since we have successfully
+                    # updated the password
+                    eh.clear_errors()
 
     def update_user_info(
             self,
@@ -2821,7 +3080,7 @@ class Authenticate(object):
             At a minimum, a callable function should take 'info' as
             an argument, which is either 'email' or 'password' as the
             type of data to pull. It should also take 'username' as that
-            is the uesrname we will match to. And it can include other
+            is the username we will match to. And it can include other
             arguments as well.
             A callable function should return:
              - A tuple of an indicator and a value
@@ -2849,12 +3108,11 @@ class Authenticate(object):
             dataset (str): The name of the dataset in the BigQuery table.
             table_name (str): The name of the table in the BigQuery
                 dataset.
-            email_col (str): The name of the column in the BigQuery
-                table that contains the emails.
-            password_col (str): The name of the column in the BigQuery
-                table that contains the passwords.
-            username_col (str): The name of the column in the BigQuery
-                table that contains the usernames.
+            col_map (dict): A dictionary mapping the info types to the
+                associated column names in the database.
+                {'email': email_col,
+                 'username': username_col,
+                 'password': password_col}
         :param info_store_function: The function to store the new email,
             username or password. This can be a callable function or a
             string.

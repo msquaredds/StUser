@@ -133,17 +133,19 @@ class BQTools(object):
         if isinstance(stored_result, str):
             return stored_result
 
-    def pull_password(
+    def pull_value_based_on_other_col_value(
             self,
             bq_creds: dict,
             project: str,
             dataset: str,
             table_name: str,
-            username_col: str,
-            username: str,
-            password_col: str) -> Tuple[str, str]:
+            reference_col: str,
+            reference_value: str,
+            target_col: str) -> Tuple[str, str]:
         """
-        Pull a password from BigQuery.
+        Pull a value from a BigQuery column (target), based on the value
+            in another column (reference). This is meant to be a unique
+            match, so only returns the first value found.
 
         :param bq_creds: The credentials to access the BigQuery project.
             These should, at a minimum, have the roles of "BigQuery Data
@@ -151,9 +153,10 @@ class BQTools(object):
         :param project: The project to pull the data from.
         :param dataset: The dataset to pull the data from.
         :param table_name: The table to pull the data from.
-        :param username_col: The column that holds the usernames.
-        :param username: The username to match.
-        :param password_col: The column that holds the passwords to pull.
+        :param reference_col: The column that holds the values to compare
+            against.
+        :param reference_value: The value to match in the reference_col.
+        :param target_col: The column that holds the value to pull.
         :return: A tuple with an indicator labeling the result as either
             'success' or 'error', and the hashed password if successful or
             the error message if not.
@@ -166,8 +169,8 @@ class BQTools(object):
 
         # create the query
         table_id = project + "." + dataset + "." + table_name
-        sql_statement = (f"SELECT {password_col} FROM {table_id} "
-                         f"WHERE {username_col} = '{username}'")
+        sql_statement = (f"SELECT {target_col} FROM {table_id} "
+                         f"WHERE {reference_col} = '{reference_value}'")
 
         # run the query
         query_result = self._run_query(client, sql_statement)
@@ -177,15 +180,16 @@ class BQTools(object):
         # create the df pull the first value
         df = query_result.to_dataframe()
         try:
-            password = df.iloc[0, 0]
+            target_value = df.iloc[0, 0]
         except Exception as e:
             # we don't have a message here because this is handled by the
-            # calling function - it should combine the lack of password
-            # with the potential for an incorrect username and display
-            # something like "Incorrect username or password."
+            # calling function - it should combine the lack of a value
+            # with the potential for an incorrect reference and display
+            # something like "Incorrect username or password" (if password
+            # is the target and username is the reference).
             return ('user_error', None)
 
-        return ('success', password)
+        return ('success', target_value)
 
     def pull_full_column_bigquery(
             self,
@@ -476,73 +480,21 @@ class BQTools(object):
 
         return ('success', data_series)
 
-    def pull_username(
+    def update_value_based_on_other_col_value(
             self,
             bq_creds: dict,
             project: str,
             dataset: str,
             table_name: str,
-            email_col: str,
-            email: str,
-            username_col: str) -> Tuple[str, str]:
-        """
-        Pull a username from BigQuery.
-
-        :param bq_creds: The credentials to access the BigQuery project.
-            These should, at a minimum, have the roles of "BigQuery Data
-            Editor", "BigQuery Read Session User" and "BigQuery Job User".
-        :param project: The project to pull the data from.
-        :param dataset: The dataset to pull the data from.
-        :param table_name: The table to pull the data from.
-        :param email_col: The column that holds the emails.
-        :param email: The email to match.
-        :param username_col: The column that holds the usernames to pull.
-        :return: A tuple with an indicator labeling the result as either
-            'success' or 'error', and the username if successful or the
-            error message if not.
-        """
-        # connect to the database
-        client = self._setup_connection(bq_creds)
-        if isinstance(client, str):
-            # in this case the "client" is an error message
-            return ('dev_error', client)
-
-        # create the query
-        table_id = project + "." + dataset + "." + table_name
-        sql_statement = (f"SELECT {username_col} FROM {table_id} "
-                         f"WHERE {email_col} = '{email}'")
-
-        # run the query
-        query_result = self._run_query(client, sql_statement)
-        if isinstance(query_result, tuple):
-            return query_result
-
-        # create the df pull the first value
-        df = query_result.to_dataframe()
-        try:
-            username = df.iloc[0, 0]
-        except Exception as e:
-            # we don't have a message here because this is handled by the
-            # calling function
-            return ('user_error', None)
-
-        return ('success', username)
-
-    def update_password(
-            self,
-            bq_creds: dict,
-            project: str,
-            dataset: str,
-            table_name: str,
-            email_col: str,
-            email: str,
-            username_col: str,
-            username: str,
-            password_col: str,
-            password: str,
+            reference_col: str,
+            reference_value: str,
+            target_col: str,
+            target_value: str,
             datetime_col: str) -> Tuple[str, str]:
         """
-        Update a password from BigQuery based on email and username.
+        Update a value in a specific column in BigQuery based on a value
+            matching in another column. Also stores the datetime to
+            record when the change occurred.
 
         :param bq_creds: The credentials to access the BigQuery project.
             These should, at a minimum, have the roles of "BigQuery Data
@@ -550,13 +502,12 @@ class BQTools(object):
         :param project: The project to pull the data from.
         :param dataset: The dataset to pull the data from.
         :param table_name: The table to pull the data from.
-        :param email_col: The column that holds the emails to match.
-        :param email: The email to match.
-        :param username_col: The column that holds the usernames match.
-        :param username: The username to match.
-        :param password_col: The column that holds the passwords, where
-            we will update.
-        :param password: The password to store.
+        :param reference_col: The column to check the reference_value
+            against.
+        :param reference_value: The value to match in the reference_col.
+        :param target_col: The column that holds the data to be updated.
+        :param target_value: The new value to store in the target_col in
+            the same row where reference_value is in reference_col.
         :param datetime_col: The column that holds the datetime, where we
             will update.
         :return: If there's an error, returns a tuple with 'dev_error' as
@@ -574,10 +525,9 @@ class BQTools(object):
         # create the query
         table_id = project + "." + dataset + "." + table_name
         sql_statement = (f"UPDATE {table_id} "
-                         f"SET {password_col} = '{password}', "
+                         f"SET {target_col} = '{target_value}', "
                          f"{datetime_col} = '{new_datetime}' "
-                         f"WHERE {email_col} = '{email}' "
-                         f"AND {username_col} = '{username}'")
+                         f"WHERE {reference_col} = '{reference_value}'")
 
         # run the query
         query_result = self._run_query(client, sql_statement)
