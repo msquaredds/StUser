@@ -269,28 +269,35 @@ class Authenticate(object):
             return f"""{website_name}: Your Username"""
         elif message_type == 'forgot_password':
             return f"""{website_name}: Your Password Reset"""
+        elif message_type == 'update_user_info':
+            return f"""{website_name}: Account Information Update"""
 
     def _get_message_body(self, message_type: str, website_name: str,
-                          username: str, website_email: str = None,
-                          password: str = None) -> str:
+                          username: str = None, website_email: str = None,
+                          password: str = None, info_type: str = None) -> str:
         if message_type == 'register_user':
             message_body = \
-                (f"""Thank you for registering for {website_name}!\n
+                (f"""Thank you for registering for {website_name}!\n\n
                  You have successfully registered with the username: 
-                 {username}.\n
+                 {username}.\n\n
                  If you did not register or you have any questions,
                  please contact us at {website_email}.""")
         elif message_type == 'forgot_username':
             message_body = \
-                (f"""You requested your username for {website_name}.\n
-                 Your username is: {username}.\n
+                (f"""You requested your username for {website_name}.\n\n
+                 Your username is: {username}.\n\n
                  If you did not request your username or you have any
                  questions, please contact us at {website_email}.""")
         elif message_type == 'forgot_password':
             message_body = \
-                (f"""You requested a password reset for {website_name}.\n
-                 Your new password is: {password}.\n
+                (f"""You requested a password reset for {website_name}.\n\n
+                 Your new password is: {password}.\n\n
                  If you did not request a password reset or you have any
+                 questions, please contact us at {website_email}.""")
+        elif message_type == 'update_user_info':
+            message_body = \
+                (f"""You have updated your {info_type} at {website_name}.\n\n
+                 If you did not request an update or you have any
                  questions, please contact us at {website_email}.""")
         return message_body
 
@@ -301,12 +308,12 @@ class Authenticate(object):
         """
         if not isinstance(message_type, str) or \
                 message_type not in ['register_user', 'forgot_username',
-                                     'forgot_password']:
+                                     'forgot_password', 'update_user_info']:
             eh.add_dev_error(
                 message_type,
                 "The message_type is not recognized. The available "
-                "options are: 'register_user','forgot_username' "
-                "or 'forgot_password'.")
+                "options are: 'register_user','forgot_username', "
+                "'forgot_password' or 'update_user_info'.")
             return False
         return True
 
@@ -348,13 +355,15 @@ class Authenticate(object):
             self, message_type: str, email_inputs: dict,
             user_email: str, email_user: Union[callable, str],
             email_creds: dict = None,  username: str = None,
-            password: str = None) -> None:
+            password: str = None, info_type: str = None) -> None:
         """
-        Send an email to the user. Can be used for user registration or
-        a forgotten username or password.
+        Send an email to the user. Can be used for user registration,
+        a forgotten username or password, or a user info update (updating
+        email, username or password).
 
         :param message_type: The type of message we are sending. Can be
-            'register_user', 'forgot_username' or 'forgot_password'.
+            'register_user', 'forgot_username', 'forgot_password' or
+            'update_user_info'.
         :param email_inputs: The inputs for the email sending process.
             These are generic for any email method and currently include:
 
@@ -362,7 +371,6 @@ class Authenticate(object):
                 registration is happening.
             website_email (str) : The email that is sending the
                 registration confirmation.
-        :param username: The user's username.
         :param user_email: The user's email.
         :param email_user: Provide the function (callable) or method (str)
             for email here.
@@ -379,11 +387,13 @@ class Authenticate(object):
                 SendGrid account and have an API key. If using this
                 method, you must supply the API key as the sendgrid_creds
                 input here.
-        :param email_creds: The credentials to use for the email API. Only
-            necessary if email_user is not None. See the
-            docstring for register_user for more information.
+        :param email_creds: The credentials to use for the email API. See
+            the docstring for register_user for more information.
+        :param username: The user's username.
         :param password: The user's password. Only necessary if
             message_type is 'forgot_password'.
+        :param info_type: The type of information being updated. Only
+            necessary if message_type is 'update_user_info'.
         """
         if (self._check_email_inputs(**email_inputs) and
                 self._check_email_type(message_type)):
@@ -391,7 +401,7 @@ class Authenticate(object):
                 message_type, email_inputs['website_name'])
             body = self._get_message_body(
                 message_type, email_inputs['website_name'], username,
-                email_inputs['website_email'], password)
+                email_inputs['website_email'], password, info_type)
             email_handler = Email(user_email, subject, body, **email_inputs)
             if isinstance(email_user, str):
                 if email_user.lower() == 'gmail':
@@ -2196,7 +2206,7 @@ class Authenticate(object):
                                            username_pull_function,
                                            username_pull_args)
             # username will only be non-False if the username was pulled
-            if username:
+            if username and email_user is not None:
                 self._send_user_email(
                     'forgot_username', email_inputs, email,
                     email_user, email_creds, username)
@@ -2866,7 +2876,7 @@ class Authenticate(object):
     def _check_info_match(self, pulled_info: str, info: str,
                           info_type: str) -> bool:
         """Check that the pulled info matches the info entered."""
-        if pulled_info and pulled_info == info:
+        if pulled_info == info:
             return True
         else:
             eh.add_user_error(
@@ -2874,6 +2884,21 @@ class Authenticate(object):
                 f"The existing {info_type} does not match. "
                 f"Please try again.")
             return False
+
+    def _compare_user_info_to_stored(
+            self, info_type: str, username: str,
+            info_pull_function: Union[str, Callable],
+            info_pull_args: dict, info: str) -> bool:
+        """Check if the user's input matches the stored info."""
+        if info_type in ('email', 'password'):
+            pulled_info = self._pull_user_info(
+                info_type, username, info_pull_function, info_pull_args)
+            if pulled_info:
+                return self._check_info_match(pulled_info, info, info_type)
+            else:
+                return False
+        else:
+            return True
 
     def _add_inputs_user_info_update(
             self, info_store_args: dict, info: str, info_type: str,
@@ -2927,6 +2952,48 @@ class Authenticate(object):
         else:
             error = info_store_function(**info_store_args)
         return error
+
+    def _user_info_update_error_handler(self, error: str,
+                                        info_type: str) -> bool:
+        """Records any errors from the user info update process."""
+        if error is not None:
+            eh.add_dev_error(
+                'update_user_info',
+                f"There was an error updating the {info_type}. "
+                f"Error: " + error)
+            return False
+        return True
+
+    def _pull_email_address(
+            self, info_type: str, new_info: str, username: str,
+            info_pull_function: Union[str, Callable],
+            info_pull_args: dict) -> bool:
+        """Pull the user's email address."""
+        if info_type == 'email':
+            return new_info
+        else:
+            pulled_info = self._pull_user_info(
+                'email', username, info_pull_function, info_pull_args)
+            if pulled_info:
+                return pulled_info
+            else:
+                return False
+
+    def _get_email_address_send_email(
+            self, info_type: str, new_info: str, username: str,
+            info_pull_function: Union[str, Callable], info_pull_args: dict,
+            email_user: Union[Callable, str], email_inputs: dict,
+            email_creds: dict) -> None:
+        """Get the user's email address and send them en email to let them
+            know their info has been updated."""
+        email_address = self._pull_email_address(
+            info_type, new_info, username, info_pull_function,
+            info_pull_args)
+        if email_address:
+            self._send_user_email(
+                'update_user_info', email_inputs,
+                email_address, email_user, email_creds,
+                info_type=info_type)
 
     def _update_user_info(
             self,
@@ -2987,18 +3054,14 @@ class Authenticate(object):
 
         # make sure the fields aren't blank
         if self._check_user_info(info_type, info, new_info, repeat_new_info):
-            info_match = True
-            if info_type in ('email', 'password'):
-                pulled_info = self._pull_user_info(
-                    info_type, username, info_pull_function, info_pull_args)
-                if info_type == 'password':
-                    # all passwords must be hashed
-                    info = Hasher([info]).generate()[0]
-                    new_info = Hasher([new_info]).generate()[0]
-                info_match = self._check_info_match(pulled_info, info,
-                                                    info_type)
-            # only continue if the user's entered existing info matches
-            # what is stored
+            if info_type == 'password':
+                # all passwords must be hashed
+                info = Hasher([info]).generate()[0]
+                new_info = Hasher([new_info]).generate()[0]
+
+            # check if the user's info matches what is stored
+            info_match = self._compare_user_info_to_stored(
+                info_type, username, info_pull_function, info_pull_args, info)
             if info_match:
                 # store the new credentials in case they are needed
                 # outside of this function
@@ -3009,26 +3072,22 @@ class Authenticate(object):
                     error = self._update_stored_user_info(
                         info_store_function, info_store_args, new_info,
                         info_type, username)
-
-                    ######################################################
-                    # STOPPED HERE
-                    ######################################################
-
-
-                    if self._password_update_error_handler(error):
+                    if self._user_info_update_error_handler(error, info_type):
                         if email_user is not None:
-                            self._send_user_email(
-                                'forgot_password', email_inputs, email,
-                                email_user, email_creds, password=password)
+                            self._get_email_address_send_email(
+                                info_type, new_info, username,
+                                info_pull_function, info_pull_args,
+                                email_user, email_inputs, email_creds)
                         else:
                             eh.clear_errors()
                 elif email_user is not None:
-                    self._send_user_email(
-                        'forgot_password', email_inputs, email,
-                        email_user, email_creds, password=password)
+                    self._get_email_address_send_email(
+                        info_type, new_info, username,
+                        info_pull_function, info_pull_args,
+                        email_user, email_inputs, email_creds)
                 else:
                     # get rid of any errors, since we have successfully
-                    # updated the password
+                    # updated the user info
                     eh.clear_errors()
 
     def update_user_info(
