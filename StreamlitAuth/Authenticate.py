@@ -3071,7 +3071,7 @@ class Authenticate(object):
         :param email_creds: The credentials to use for the email API. See
             update_user_info for more details.
         """
-        info_type = st.session_state[select_box_key]
+        info_type = st.session_state[select_box_key].lower()
         # this doesn't exist for username, just email and password
         if user_info_text_key in st.session_state:
             info = st.session_state[user_info_text_key]
