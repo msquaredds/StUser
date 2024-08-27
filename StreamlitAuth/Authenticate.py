@@ -2905,7 +2905,10 @@ class Authenticate(object):
     def _check_info_match(self, pulled_info: str, info: str,
                           info_type: str) -> bool:
         """Check that the pulled info matches the info entered."""
-        if pulled_info == info:
+        if info_type != 'password' and pulled_info == info:
+            return True
+        elif (info_type == 'password' and
+                Hasher([info]).check([pulled_info])[0]):
             return True
         else:
             eh.add_user_error(
@@ -3097,9 +3100,7 @@ class Authenticate(object):
         if self._check_user_info(info_type, info, new_info, repeat_new_info):
             if info_type == 'password':
                 # all passwords must be hashed
-                info = Hasher([info]).generate()[0]
                 new_info = Hasher([new_info]).generate()[0]
-                st.write("info password", info)
                 st.write("new_info password", new_info)
 
             # check if the user's info matches what is stored
