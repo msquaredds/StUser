@@ -2764,6 +2764,22 @@ class Authenticate(object):
                   password_store_function, password_store_args,
                   email_user, email_inputs, email_creds))
 
+    def _check_store_new_info(self, store_new_info: Union[str, list]):
+        """We want to make sure store_new_info is either 'any' or a string
+            or list including 'email', 'username' or 'password'."""
+        if ((isinstance(store_new_info, str) and
+                store_new_info not in ['any', 'email', 'username',
+                                       'password'])
+                or (isinstance(store_new_info, list) and
+                        not all([x in ['email', 'username', 'password']
+                                    for x in store_new_info]))):
+            eh.add_dev_error(
+                'update_user_info',
+                "store_new_info argument must be either 'any' or a string "
+                "or list including 'email', 'username' or 'password'.")
+            return False
+        return True
+
     def _check_user_info(self, info_type: str, info: str, new_info: str,
                          repeat_new_info: str) -> bool:
         """Check whether the info is filled in, and the new info
@@ -2935,6 +2951,23 @@ class Authenticate(object):
         else:
             return True
 
+    def _session_state_new_info(self, store_new_info: Union[str, list],
+                                info_type: str, new_info: str) -> None:
+        """If we want to store the user's new info in a session_state,
+            do that here."""
+        if (store_new_info is not None and
+                (store_new_info == 'any' or
+                 (isinstance(store_new_info, str) and
+                  store_new_info == info_type) or
+                 (isinstance(store_new_info, list) and
+                  info_type in store_new_info))):
+            if info_type == 'email':
+                st.session_state.stauth['new_email'] = new_info
+            elif info_type == 'username':
+                st.session_state.stauth['new_username'] = new_info
+            elif info_type == 'password':
+                st.session_state.stauth['new_password'] = new_info
+
     def _add_inputs_user_info_update(
             self, info_store_args: dict, info: str, info_type: str,
             username: str) -> dict:
@@ -3046,7 +3079,8 @@ class Authenticate(object):
             info_store_args: dict = None,
             email_user: Union[Callable, str] = None,
             email_inputs: dict = None,
-            email_creds: dict = None) -> None:
+            email_creds: dict = None,
+            store_new_info: Union[str, list] = None) -> None:
         """
         Checks the validity of the entered email, username or password
         and, if correct, stores the new email, username or password and
@@ -3080,6 +3114,9 @@ class Authenticate(object):
             See update_user_info for more details.
         :param email_creds: The credentials to use for the email API. See
             update_user_info for more details.
+        :param store_new_info: A way to specify whether to store the new
+            user info in a session_state. See update_user_info for more
+            details.
         """
         info_type = st.session_state[select_box_key].lower()
         # this doesn't exist for username, just email and password
@@ -3108,6 +3145,9 @@ class Authenticate(object):
                 info_type, username, info_pull_function, info_pull_args.copy(),
                 info)
             if info_match:
+                # store new_info in a session_state if desired
+                self._session_state_new_info(store_new_info, info_type,
+                                             new_info)
                 if info_store_function is not None:
                     error = self._update_stored_user_info(
                         info_store_function, info_store_args, new_info,
@@ -3144,7 +3184,8 @@ class Authenticate(object):
             info_store_args: dict = None,
             email_user: Union[Callable, str] = None,
             email_inputs: dict = None,
-            email_creds: dict = None) -> None:
+            email_creds: dict = None,
+            store_new_info: Union[str, list] = None) -> None:
         """
         Creates an update user info form. This allows the user to change
             their email, username or password.
@@ -3318,9 +3359,25 @@ class Authenticate(object):
             Otherwise, these must be defined by the user in the callable
             function and will likely include credentials to the email
             service.
+        :param store_new_info: If you want to store the user's new info
+            in a session_state, you can specify that here. Since storing a
+            password in session_state can cause potential for dangerous
+            leakage, we make the allowable values a string, so the
+            developer must specify what to save. You can enter either:
+            'any' or a string/list including 'email', 'username' or
+            'password' to determine which will be stored when a user makes
+            an update. For example, if you wanted to save just email and
+            username you could do store_new_info=['email', 'username'].
+            These will be stored in the following session_states:
+            - email: st.session_state.stauth['new_email']
+            - username: st.session_state.stauth['new_username']
+            - password: st.session_state.stauth['new_password']
+            Note that password will be the hashed password (not the
+            original user input).
         """
         # check whether the inputs are within the correct set of options
-        if not self._check_form_inputs(location, 'update_user_info'):
+        if (not self._check_form_inputs(location, 'update_user_info') or
+                not self._check_store_new_info(store_new_info)):
             return False
 
         # we need a key for the info so they can be accessed in
@@ -3375,4 +3432,5 @@ class Authenticate(object):
                   user_info_text_key_new, user_info_text_key_new_repeat,
                   info_pull_function, info_pull_args,
                   info_store_function, info_store_args,
-                  email_user, email_inputs, email_creds))
+                  email_user, email_inputs, email_creds,
+                  store_new_info))
