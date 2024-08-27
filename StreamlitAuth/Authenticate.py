@@ -3105,7 +3105,8 @@ class Authenticate(object):
 
             # check if the user's info matches what is stored
             info_match = self._compare_user_info_to_stored(
-                info_type, username, info_pull_function, info_pull_args, info)
+                info_type, username, info_pull_function, info_pull_args.copy(),
+                info)
             if info_match:
                 if info_store_function is not None:
                     error = self._update_stored_user_info(
