@@ -2895,6 +2895,9 @@ class Authenticate(object):
             indicator, value = info_pull_function(**info_pull_args)
 
         # only continue if we didn't have any issues getting the info
+        st.write("info_type", info_type)
+        st.write("indicator", indicator)
+        st.write("value", value)
         if self._user_info_pull_error_handler(info_type, indicator, value):
             return value
         return False
@@ -3001,6 +3004,10 @@ class Authenticate(object):
         if info_type == 'email':
             return new_info
         else:
+            st.write("_pull_email_address")
+            st.write("username", username)
+            st.write("info_pull_function", info_pull_function)
+            st.write("info_pull_args", info_pull_args)
             pulled_info = self._pull_user_info(
                 'email', username, info_pull_function, info_pull_args)
             if pulled_info:
