@@ -2881,7 +2881,7 @@ class Authenticate(object):
             if info_pull_function.lower() == 'bigquery':
                 # update the info_pull_args based on the info_type
                 info_pull_args = self._rename_user_info_pull_args(
-                    info_type, info_pull_args)
+                    info_pull_args)
                 db = BQTools()
                 indicator, value = db.pull_value_based_on_other_col_value(
                     **info_pull_args)
@@ -3318,19 +3318,22 @@ class Authenticate(object):
         # the callback through session_state (such as st.session_state[
         # 'forgot_password_email'])
         if location == 'main':
-            info_type = st.selectbox(
-                '### Update User Info', ['Email', 'Username', 'Password'],
-                key=select_box_key)
+            with st.container(border=True):
+                st.subheader('Update User Info')
+                info_type = st.selectbox(
+                    '', ['Email', 'Username', 'Password'], key=select_box_key,
+                    visibility='collapsed')
         else:
-            info_type = st.sidebar.selectbox(
-                '### Update User Info', ['Email', 'Username', 'Password'],
-                key=select_box_key)
+            with st.sidebar.container(border=True):
+                st.subheader('Update User Info')
+                info_type = st.selectbox(
+                    '', ['Email', 'Username', 'Password'], key=select_box_key,
+                    visibility='collapsed')
 
         if location == 'main':
             update_user_info_form = st.form('Update User Info')
         else:
             update_user_info_form = st.sidebar.form('Update User Info')
-        update_user_info_form.subheader('Update User Info')
 
         if info_type == 'Email':
             info_existing = update_user_info_form.text_input(
