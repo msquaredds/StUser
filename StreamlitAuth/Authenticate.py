@@ -3322,13 +3322,13 @@ class Authenticate(object):
                 st.subheader('Update User Info')
                 info_type = st.selectbox(
                     '', ['Email', 'Username', 'Password'], key=select_box_key,
-                    visibility='collapsed')
+                    label_visibility='collapsed')
         else:
             with st.sidebar.container(border=True):
                 st.subheader('Update User Info')
                 info_type = st.selectbox(
                     '', ['Email', 'Username', 'Password'], key=select_box_key,
-                    visibility='collapsed')
+                    label_visibility='collapsed')
 
         if location == 'main':
             update_user_info_form = st.form('Update User Info')
