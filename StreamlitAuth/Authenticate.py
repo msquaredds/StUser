@@ -2090,7 +2090,6 @@ class Authenticate(object):
 
     def _rename_username_pull_args(self, username_pull_args: dict) -> dict:
         """Update the target and reference columns and reference value."""
-        st.write("username_pull_args", username_pull_args)
         username_pull_args['reference_col'] = username_pull_args['email_col']
         username_pull_args['reference_value'] = username_pull_args['email']
         username_pull_args['target_col'] = username_pull_args['username_col']
@@ -3310,18 +3309,23 @@ class Authenticate(object):
         if not self._check_form_inputs(location, 'update_user_info'):
             return False
 
+        # we need a key for the info so they can be accessed in
+        # the callback through session_state (such as st.session_state[
+        # 'forgot_password_email'])
+        if location == 'main':
+            info_type = st.selectbox(
+                'Update User Info', ['Email', 'Username', 'Password'],
+                key=select_box_key, label_visibility='collapsed')
+        else:
+            info_type = st.sidebar.selectbox(
+                'Update User Info', ['Email', 'Username', 'Password'],
+                key=select_box_key, label_visibility='collapsed')
+
         if location == 'main':
             update_user_info_form = st.form('Update User Info')
         else:
             update_user_info_form = st.sidebar.form('Update User Info')
         update_user_info_form.subheader('Update User Info')
-
-        # we need a key for the info so they can be accessed in
-        # the callback through session_state (such as st.session_state[
-        # 'forgot_password_email'])
-        info_type = update_user_info_form.selectbox(
-            '', ['Email', 'Username', 'Password'], key=select_box_key,
-            label_visibility='collapsed')
 
         if info_type == 'Email':
             info_existing = update_user_info_form.text_input(
