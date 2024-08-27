@@ -771,6 +771,18 @@ class Authenticate(object):
         existing_args['username'] = username
         return existing_args
 
+    def _rename_password_pull_args(self, password_pull_args: dict) -> dict:
+        """Update the target and reference columns and reference value."""
+        password_pull_args['reference_col'] = password_pull_args[
+            'username_col']
+        password_pull_args['reference_value'] = password_pull_args[
+            'username']
+        password_pull_args['target_col'] = password_pull_args['password_col']
+        password_pull_args.remove('username_col')
+        password_pull_args.remove('username')
+        password_pull_args.remove('password_col')
+        return password_pull_args
+
     def _pull_locked_unlocked_error_handler(self, indicator: str,
                                             value: str) -> bool:
         """ Records any errors from pulling the latest locked and unlocked
@@ -1055,6 +1067,8 @@ class Authenticate(object):
         # pull the password
         if isinstance(password_pull_function, str):
             if password_pull_function.lower() == 'bigquery':
+                password_pull_args = self._rename_password_pull_args(
+                    password_pull_args)
                 db = BQTools()
                 indicator, value = db.pull_value_based_on_other_col_value(
                     **password_pull_args)
@@ -2074,6 +2088,16 @@ class Authenticate(object):
         existing_args['email'] = email
         return existing_args
 
+    def _rename_username_pull_args(self, username_pull_args: dict) -> dict:
+        """Update the target and reference columns and reference value."""
+        username_pull_args['reference_col'] = username_pull_args['email_col']
+        username_pull_args['reference_value'] = username_pull_args['email']
+        username_pull_args['target_col'] = username_pull_args['username_col']
+        username_pull_args.remove('email_col')
+        username_pull_args.remove('email')
+        username_pull_args.remove('username_col')
+        return username_pull_args
+
     def _username_pull_error_handler(self, pull_type: str, indicator: str,
                                      value: str) -> bool:
         """ Records any errors from the username pulling process. Note
@@ -2151,6 +2175,8 @@ class Authenticate(object):
         # pull the username
         if isinstance(username_pull_function, str):
             if username_pull_function.lower() == 'bigquery':
+                username_pull_args = self._rename_username_pull_args(
+                    username_pull_args)
                 db = BQTools()
                 indicator, value = db.pull_value_based_on_other_col_value(
                     **username_pull_args)
