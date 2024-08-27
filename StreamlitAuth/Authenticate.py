@@ -2916,9 +2916,12 @@ class Authenticate(object):
             info_pull_function: Union[str, Callable],
             info_pull_args: dict, info: str) -> bool:
         """Check if the user's input matches the stored info."""
+        st.write("info_pull_function", info_pull_function)
+        st.write("info_pull_args", info_pull_args)
         if info_type in ('email', 'password'):
             pulled_info = self._pull_user_info(
                 info_type, username, info_pull_function, info_pull_args)
+            st.write("pulled_info", pulled_info)
             if pulled_info:
                 return self._check_info_match(pulled_info, info, info_type)
             else:
@@ -3077,6 +3080,11 @@ class Authenticate(object):
         new_info = st.session_state[user_info_text_key_new]
         repeat_new_info = st.session_state[user_info_text_key_new_repeat]
         username = st.session_state.stauth['username']
+        st.write("info_type", info_type)
+        st.write("info", info)
+        st.write("new_info", new_info)
+        st.write("repeat_new_info", repeat_new_info)
+        st.write("username", username)
 
         # make sure the fields aren't blank
         if self._check_user_info(info_type, info, new_info, repeat_new_info):
@@ -3084,16 +3092,13 @@ class Authenticate(object):
                 # all passwords must be hashed
                 info = Hasher([info]).generate()[0]
                 new_info = Hasher([new_info]).generate()[0]
+                st.write("info password", info)
+                st.write("new_info password", new_info)
 
             # check if the user's info matches what is stored
             info_match = self._compare_user_info_to_stored(
                 info_type, username, info_pull_function, info_pull_args, info)
             if info_match:
-                # store the new credentials in case they are needed
-                # outside of this function
-                st.session_state[self.user_credentials_session_state][
-                    info_type] = new_info
-
                 if info_store_function is not None:
                     error = self._update_stored_user_info(
                         info_store_function, info_store_args, new_info,
@@ -3314,12 +3319,12 @@ class Authenticate(object):
         # 'forgot_password_email'])
         if location == 'main':
             info_type = st.selectbox(
-                'Update User Info', ['Email', 'Username', 'Password'],
-                key=select_box_key, label_visibility='collapsed')
+                '### Update User Info', ['Email', 'Username', 'Password'],
+                key=select_box_key)
         else:
             info_type = st.sidebar.selectbox(
-                'Update User Info', ['Email', 'Username', 'Password'],
-                key=select_box_key, label_visibility='collapsed')
+                '### Update User Info', ['Email', 'Username', 'Password'],
+                key=select_box_key)
 
         if location == 'main':
             update_user_info_form = st.form('Update User Info')
