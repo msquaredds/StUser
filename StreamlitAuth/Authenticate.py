@@ -778,9 +778,9 @@ class Authenticate(object):
         password_pull_args['reference_value'] = password_pull_args[
             'username']
         password_pull_args['target_col'] = password_pull_args['password_col']
-        password_pull_args.remove('username_col')
-        password_pull_args.remove('username')
-        password_pull_args.remove('password_col')
+        del password_pull_args['username_col']
+        del password_pull_args['username']
+        del password_pull_args['password_col']
         return password_pull_args
 
     def _pull_locked_unlocked_error_handler(self, indicator: str,
@@ -2090,12 +2090,13 @@ class Authenticate(object):
 
     def _rename_username_pull_args(self, username_pull_args: dict) -> dict:
         """Update the target and reference columns and reference value."""
+        st.write("username_pull_args", username_pull_args)
         username_pull_args['reference_col'] = username_pull_args['email_col']
         username_pull_args['reference_value'] = username_pull_args['email']
         username_pull_args['target_col'] = username_pull_args['username_col']
-        username_pull_args.remove('email_col')
-        username_pull_args.remove('email')
-        username_pull_args.remove('username_col')
+        del username_pull_args['email_col']
+        del username_pull_args['email']
+        del username_pull_args['username_col']
         return username_pull_args
 
     def _username_pull_error_handler(self, pull_type: str, indicator: str,
@@ -2425,10 +2426,10 @@ class Authenticate(object):
             'username']
         password_store_args['target_col'] = password_store_args['password_col']
         password_store_args['target_value'] = password_store_args['password']
-        password_store_args.remove('username_col')
-        password_store_args.remove('username')
-        password_store_args.remove('password_col')
-        password_store_args.remove('password')
+        del password_store_args['username_col']
+        del password_store_args['username']
+        del password_store_args['password_col']
+        del password_store_args['password']
         return password_store_args
 
     def _update_password(self, password_store_function: Union[Callable, str],
@@ -2800,9 +2801,9 @@ class Authenticate(object):
             info_pull_args['type']]
         info_pull_args['reference_col'] = info_pull_args['col_map']['username']
         info_pull_args['reference_value'] = info_pull_args['username']
-        info_pull_args.remove('type')
-        info_pull_args.remove('username')
-        info_pull_args.remove('col_map')
+        del info_pull_args['type']
+        del info_pull_args['username']
+        del info_pull_args['col_map']
         return info_pull_args
 
     def _user_info_pull_error_handler(self, info_type: str, indicator: str,
@@ -2948,10 +2949,10 @@ class Authenticate(object):
         info_store_args['target_value'] = info_store_args['info']
         info_store_args['datetime_col'] = info_store_args['col_map'][
             'datetime']
-        info_store_args.remove('info')
-        info_store_args.remove('type')
-        info_store_args.remove('username')
-        info_store_args.remove('col_map')
+        del info_store_args['info']
+        del info_store_args['type']
+        del info_store_args['username']
+        del info_store_args['col_map']
         return info_store_args
 
     def _update_stored_user_info(
