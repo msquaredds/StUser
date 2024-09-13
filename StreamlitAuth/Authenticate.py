@@ -2784,20 +2784,68 @@ class Authenticate(object):
                          repeat_new_info: str) -> bool:
         """Check whether the info is filled in, and the new info
             matches."""
-        if ((info_type == 'username' and
-                not (len(new_info) > 0 and len(repeat_new_info) > 0)) or
-                (info_type != 'username' and
-                 not (len(info) > 0 and len(new_info) > 0 and
-                      len(repeat_new_info) > 0))):
-            eh.add_user_error(
-                'update_user_info',
-                "Please enter all info.")
-            return False
         if new_info != repeat_new_info:
             eh.add_user_error(
                 'update_user_info',
                 "The new info does not match. Please try again.")
             return False
+
+        validator = Validator()
+        if info_type == 'username':
+            if not (len(new_info) > 0 and len(repeat_new_info) > 0):
+                eh.add_user_error(
+                    'update_user_info',
+                    "Please enter all info.")
+                return False
+            # the username must not already be used
+            if new_info in st.session_state[self.usernames_session_state]:
+                eh.add_user_error(
+                    'update_user_info',
+                    "Username already taken.")
+                return False
+            # the username must be of correct format
+            if not validator.validate_username(new_info):
+                eh.add_user_error(
+                    'update_user_info',
+                    "Username must only include letters, numbers, '-' or '_' "
+                    "and be between 1 and 20 characters long.")
+                return False
+        elif info_type == 'email':
+            if not (len(info) > 0 and len(new_info) > 0 and
+                    len(repeat_new_info) > 0):
+                eh.add_user_error(
+                    'update_user_info',
+                    "Please enter all info.")
+                return False
+            # the email must not already be used
+            if new_info in st.session_state[self.emails_session_state]:
+                eh.add_user_error(
+                    'update_user_info',
+                    "Email already taken, please use forgot username if "
+                    "this is your email.")
+                return False
+            # the email must be of correct format
+            if not validator.validate_email(new_info):
+                eh.add_user_error(
+                    'update_user_info',
+                    "Email is not a valid format.")
+                return False
+        elif info_type == 'password':
+            if not (len(info) > 0 and len(new_info) > 0 and
+                    len(repeat_new_info) > 0):
+                eh.add_user_error(
+                    'update_user_info',
+                    "Please enter all info.")
+                return False
+            # the password must be secure enough
+            if not validator.validate_password(new_password,
+                                               self.weak_passwords):
+                eh.add_user_error(
+                    'register_user',
+                    "Password must be between 8 and 64 characters, contain at "
+                    "least one uppercase letter, one lowercase letter, one "
+                    "number, and one special character.")
+                return False
         return True
 
     def _add_inputs_user_info_pull(
@@ -3425,6 +3473,11 @@ class Authenticate(object):
             info_new_repeat = update_user_info_form.text_input(
                 'Repeat New Password', key=user_info_text_key_new_repeat,
                 type='password')
+
+        ##################################################################
+        # STILL NEED TO CHECK IF NEW USERNAME OR EMAIL ALREADY EXIST
+        # AND DO THE SAME CHECKS AS register_user ON ALL INPUTS
+        ##################################################################
 
         update_user_info_form.form_submit_button(
             'Update Info', on_click=self._update_user_info,
