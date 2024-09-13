@@ -3000,9 +3000,22 @@ class Authenticate(object):
             return True
 
     def _session_state_new_info(self, store_new_info: Union[str, list],
-                                info_type: str, new_info: str) -> None:
-        """If we want to store the user's new info in a session_state,
-            do that here."""
+                                info_type: str, new_info: str,
+                                info: str, username: str) -> None:
+        """Replace any email or username that was in the
+            'authenticator_emails' or 'authenticator_usernames' session
+            states.
+            If we want to store the user's new info in a session_state,
+            do that here too."""
+        if info_type == 'email':
+            st.session_state['authenticator_emails'] = [
+                new_info if x == info else x
+                for x in st.session_state['authenticator_emails']]
+        elif info_type == 'username':
+            st.session_state['authenticator_usernames'] = [
+                new_info if x == username else x
+                for x in st.session_state['authenticator_usernames']]
+
         if (store_new_info is not None and
                 (store_new_info == 'any' or
                  (isinstance(store_new_info, str) and
@@ -3195,7 +3208,7 @@ class Authenticate(object):
             if info_match:
                 # store new_info in a session_state if desired
                 self._session_state_new_info(store_new_info, info_type,
-                                             new_info)
+                                             new_info, info, username)
                 if info_store_function is not None:
                     error = self._update_stored_user_info(
                         info_store_function, info_store_args, new_info,
