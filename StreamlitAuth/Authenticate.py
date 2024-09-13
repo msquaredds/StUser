@@ -3426,8 +3426,6 @@ class Authenticate(object):
         # check whether the inputs are within the correct set of options
         if (not self._check_form_inputs(location, 'update_user_info') or
                 not self._check_store_new_info(store_new_info)):
-            st.write(st.session_state['stauth'])
-            st.stop()
             return False
 
         # we need a key for the info so they can be accessed in
