@@ -3474,11 +3474,6 @@ class Authenticate(object):
                 'Repeat New Password', key=user_info_text_key_new_repeat,
                 type='password')
 
-        ##################################################################
-        # STILL NEED TO CHECK IF NEW USERNAME OR EMAIL ALREADY EXIST
-        # AND DO THE SAME CHECKS AS register_user ON ALL INPUTS
-        ##################################################################
-
         update_user_info_form.form_submit_button(
             'Update Info', on_click=self._update_user_info,
             args=(select_box_key, user_info_text_key,
