@@ -3215,6 +3215,8 @@ class Authenticate(object):
                         info_type, username)
                     if self._user_info_update_error_handler(error, info_type):
                         if email_user is not None:
+                            if info_type == 'username':
+                                username = new_info
                             self._get_email_address_send_email(
                                 info_type, new_info, username,
                                 info_pull_function, info_pull_args,
@@ -3222,6 +3224,8 @@ class Authenticate(object):
                         else:
                             eh.clear_errors()
                 elif email_user is not None:
+                    if info_type == 'username':
+                        username = new_info
                     self._get_email_address_send_email(
                         info_type, new_info, username,
                         info_pull_function, info_pull_args,
