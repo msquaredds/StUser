@@ -2838,8 +2838,7 @@ class Authenticate(object):
                     "Please enter all info.")
                 return False
             # the password must be secure enough
-            if not validator.validate_password(new_password,
-                                               self.weak_passwords):
+            if not validator.validate_password(new_info, self.weak_passwords):
                 eh.add_user_error(
                     'register_user',
                     "Password must be between 8 and 64 characters, contain at "
