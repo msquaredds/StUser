@@ -3211,6 +3211,8 @@ class Authenticate(object):
                     existing_username = username
                     updated_username = new_info
                     st.session_state.stauth['username'] = new_info
+                else:
+                    existing_username = updated_username = username
                 # store new_info in a session_state if desired
                 self._session_state_new_info(store_new_info, info_type,
                                              new_info, info, existing_username)
