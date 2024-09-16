@@ -2840,7 +2840,7 @@ class Authenticate(object):
             # the password must be secure enough
             if not validator.validate_password(new_info, self.weak_passwords):
                 eh.add_user_error(
-                    'register_user',
+                    'update_user_info',
                     "Password must be between 8 and 64 characters, contain at "
                     "least one uppercase letter, one lowercase letter, one "
                     "number, and one special character.")
@@ -3205,28 +3205,30 @@ class Authenticate(object):
                 info_type, username, info_pull_function, info_pull_args.copy(),
                 info)
             if info_match:
+                # we need the old username to update the stored info but
+                # the new username for the email and session_state
+                if info_type == 'username':
+                    existing_username = username
+                    updated_username = new_info
+                    st.session_state.stauth['username'] = new_info
                 # store new_info in a session_state if desired
                 self._session_state_new_info(store_new_info, info_type,
-                                             new_info, info, username)
+                                             new_info, info, existing_username)
                 if info_store_function is not None:
                     error = self._update_stored_user_info(
                         info_store_function, info_store_args, new_info,
-                        info_type, username)
+                        info_type, existing_username)
                     if self._user_info_update_error_handler(error, info_type):
                         if email_user is not None:
-                            if info_type == 'username':
-                                username = new_info
                             self._get_email_address_send_email(
-                                info_type, new_info, username,
+                                info_type, new_info, updated_username,
                                 info_pull_function, info_pull_args,
                                 email_user, email_inputs, email_creds)
                         else:
                             eh.clear_errors()
                 elif email_user is not None:
-                    if info_type == 'username':
-                        username = new_info
                     self._get_email_address_send_email(
-                        info_type, new_info, username,
+                        info_type, new_info, updated_username,
                         info_pull_function, info_pull_args,
                         email_user, email_inputs, email_creds)
                 else:
