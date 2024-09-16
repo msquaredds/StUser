@@ -25,7 +25,12 @@ class Authenticate(object):
                  emails_session_state: str,
                  user_credentials_session_state: str,
                  preauthorized_session_state: str = None,
-                 weak_passwords: list = []) -> None:
+                 weak_passwords: list = [],
+                 email_user: Union[Callable, str] = None,
+                 email_inputs: dict = None,
+                 email_creds: dict = None,
+                 save_pull_function: str = None,
+                 save_pull_args: dict = None) -> None:
         """
         :param usernames_session_state: The session state name to access
             the LIST of existing usernames (st.session_state[
@@ -60,12 +65,134 @@ class Authenticate(object):
             this class and want the updated list to persist.
         :param weak_passwords: The list of weak passwords that shouldn't
             be used. This isn't required, but is recommended.
+        :param email_user: If we want to email the user after registering
+            or updating their info, provide the method for email here,
+            this can be a callable function or a string. The function can
+            also return an error message as a string, which will be handled
+            by the error handler.
+
+            This variable is only necessary if you want to email the user
+            in all cases and use the same method for emailing in each
+            case. Otherwise, you can specify the email method in each
+            individual function below.
+
+            The current pre-defined function types are:
+
+            "gmail": the user wants to use their Gmail account to send
+                the email and must have the gmail API enabled. Note that
+                this only works for local / desktop apps. If using this
+                method, you must supply the
+                oauth2_credentials_secrets_dict variable and
+                optionally the oauth2_credentials_token_file_name
+                variable, as parts of the gmail_creds input.
+                https://developers.google.com/gmail/api/guides
+            "sendgrid": the user wants to use the SendGrid API to send
+                the email. Note that you must have signed up for a
+                SendGrid account and have an API key. If using this
+                method, you must supply the API key as the sendgrid_creds
+                input here.
+        :param email_inputs: The inputs for the email sending process.
+            Only necessary for when email_user is not None.
+            These are generic for any email method and currently include:
+
+            website_name (str): The name of the website where the
+                registration is happening.
+            website_email (str) : The email that is sending the
+                registration confirmation.
+        :param email_creds: The credentials to use for the email API. Only
+            necessary if email_user is not None.
+
+            If email_user = 'gmail':
+                oauth2_credentials_secrets_dict (dict): The dictionary of
+                    the client secrets. Note that putting the secrets file
+                    in the same directory as the script is not secure.
+                oauth2_credentials_token_file_name (str): Optional. The
+                    name of the file to store the token, so it is not
+                    necessary to reauthenticate every time. If left out,
+                    it will default to 'token.json'.
+            If email_user = 'sendgrid':
+                sendgrid_api_key (str): The API key for the SendGrid API.
+                    Note that it should be stored separately in a secure
+                    location, such as a Google Cloud Datastore or
+                    encrypted in your project's pyproject.toml file.
+
+                    Example code to get the credentials in Google Cloud
+                        DataStore (you must install google-cloud-datastore
+                        in your environment):
+                        from google.cloud import datastore
+                        # you can also specify the project and/or database
+                        # in Client() below
+                        # you might also need credentials to connect to
+                        # the client if not run on Google App Engine (or
+                        # another service that recognizes the credentials
+                        # automatically)
+                        client = datastore.Client()
+                        # replace "apikeys" with the kind you set up in
+                        # datastore
+                        docs = list(client.query(kind="apikeys").fetch())
+                        # replace "sendgridapikey" with the name of the
+                        # key you set up in datastore
+                        api_key = docs[0]["sendgridapikey"]
+            Otherwise, these must be defined by the user in the callable
+            function and will likely include credentials to the email
+            service.
+        :param save_pull_function: If you always want to use the same type
+            of save or pull function, and that method is one of the
+            built-in methods, you can specify that here.
+
+            The current pre-defined types are:
+                'bigquery': Saves and pulls from a BigQuery table.
+        :param save_pull_args: If you have defined a save_pull_function,
+            you can specify the arguments that are consistent for all
+            methods here. This is a dictionary of the arguments that are
+            passed to the save_pull_function.
+
+            If save_pull_function = 'bigquery':
+                bq_creds (dict): Your credentials for BigQuery, such as a
+                    service account key (which would be downloaded as JSON
+                    and then converted to a dict before using them here).
+                project (str): The name of the Google Cloud project where
+                    the BigQuery dataset is located. This should already
+                    exist in GCP and have the BigQuery API enabled.
+                dataset (str): The name of the dataset in BigQuery.
+                    This should already have been created in BigQuery.
+
+                Note that additional arguments will be specified in the
+                individual methods below, such as the table or column
+                names. You can also specify any of these arguments in the
+                individual methods below, and they will override the ones
+                specified here.
         """
         self.usernames_session_state = usernames_session_state
         self.emails_session_state = emails_session_state
         self.user_credentials_session_state = user_credentials_session_state
         self.preauthorized_session_state = preauthorized_session_state
         self.weak_passwords = weak_passwords
+        self.email_user = email_user
+        self.email_inputs = email_inputs
+        self.email_creds = email_creds
+        self.save_pull_function = save_pull_function
+        self.save_pull_args = save_pull_args
+
+        if not self._check_class_session_states():
+            return
+        else:
+            # we need all the usernames and emails to be lowercase so the
+            # user can't register with the same username or email but
+            # with different capitalization
+            st.session_state[self.usernames_session_state] = [
+                i.lower() for i in
+                st.session_state[self.usernames_session_state]]
+            st.session_state[self.emails_session_state] = [
+                i.lower() for i in
+                st.session_state[self.emails_session_state]]
+
+        self.save_pull_function_options = ['bigquery']
+        self.save_pull_args_options = {
+            'bigquery': ['bq_creds', 'project', 'dataset']}
+
+        if not self._check_class_save_pull():
+            return
 
         if 'stauth' not in st.session_state:
             st.session_state['stauth'] = {}
@@ -74,17 +201,16 @@ class Authenticate(object):
         if 'username' not in st.session_state.stauth:
             st.session_state.stauth['username'] = None
 
-    def _check_register_user_session_states(
-            self, preauthorization: bool) -> bool:
+    def _check_class_session_states(self) -> bool:
         """
-        Check on whether all session state inputs for register_user exist
+        Check on whether all session state inputs for exist for the class
         and are the correct type.
         """
         if self.usernames_session_state not in st.session_state or \
                 not isinstance(st.session_state[self.usernames_session_state],
                                (list, set)):
             eh.add_dev_error(
-                'register_user',
+                'class_instantiation',
                 "usernames_session_state must be a list or set "
                 "assigned to st.session_state[usernames_session_state]")
             return False
@@ -92,21 +218,41 @@ class Authenticate(object):
                 not isinstance(st.session_state[self.emails_session_state],
                                (list, set)):
             eh.add_dev_error(
-                'register_user',
+                'class_instantiation',
                 "emails_session_state must be a list or set assigned to "
                 "st.session_state[emails_session_state]")
             return False
-        if preauthorization:
-            if self.preauthorized_session_state not in st.session_state or \
-                    not isinstance(st.session_state[
-                                       self.preauthorized_session_state],
-                                   (list, set)):
-                eh.add_dev_error(
-                    'register_user',
-                    "preauthorized_session_state must be a list or set "
-                    "assigned to st.session_state["
-                    "preauthorized_session_state]")
-                return False
+        if (self.preauthorized_session_state is not None and
+                (self.preauthorized_session_state not in st.session_state or
+                 not isinstance(st.session_state[
+                                    self.preauthorized_session_state],
+                                (list, set)))):
+            eh.add_dev_error(
+                'class_instantiation',
+                "preauthorized_session_state must be a list or set "
+                "assigned to st.session_state[preauthorized_session_state]")
+            return False
+        return True
+
+    def _check_class_save_pull(self) -> bool:
+        """
+        Check on whether the save_pull_function and save_pull_args are
+        within the correct set of options.
+        """
+        if not self.save_pull_function in self.save_pull_function_options:
+            eh.add_dev_error(
+                'class_instantiation',
+                f"save_pull_function must be a string "
+                f"with any of the values in {self.save_pull_function_options}")
+            return False
+        if (self.save_pull_args is not None and
+                not all(arg in self.save_pull_args_options[
+                    self.save_pull_function] for arg in self.save_pull_args)):
+            eh.add_dev_error(
+                'class_instantiation',
+                f"save_pull_args must be a dictionary with keys "
+                f"from {self.save_pull_args_options[self.save_pull_function]}")
+            return False
         return True
 
     def _check_form_inputs(self, location: str, form: str) -> bool:
@@ -120,6 +266,60 @@ class Authenticate(object):
                 "location argument must be one of 'main' or 'sidebar'")
             return False
         return True
+
+    def _define_email_vars(
+            self,
+            email_user: Union[Callable, str],
+            email_inputs: dict,
+            email_creds: dict) -> Tuple[Union[Callable, str], dict, dict]:
+        """
+        For methods with emailing, define the email variables as either
+        the class email variables or the ones passed in the method.
+        """
+        if email_user is None and self.email_user is not None:
+            email_user = self.email_user
+        if email_inputs is None and self.email_inputs is not None:
+            email_inputs = self.email_inputs
+        if email_creds is None and self.email_creds is not None:
+            email_creds = self.email_creds
+        return email_user, email_inputs, email_creds
+
+    def _define_save_pull_vars(
+            self,
+            form: str,
+            save_pull_function: Union[Callable, str] = None,
+            save_pull_args: dict = None) -> Tuple[Union[Callable, str], dict]:
+        """
+        Define the save or pull variables as either the class save_pull
+        variables or the ones passed in the method. We also add additional
+        args that were defined in the method, since they are unique.
+        """
+        if save_pull_function is None and self.save_pull_function is not None:
+            save_pull_function = self.save_pull_function
+            check_args = True
+        else:
+            check_args = False
+
+        if save_pull_args is not None and self.save_pull_args is not None:
+            for key, value in self.save_pull_args.items():
+                if key not in save_pull_args:
+                    save_pull_args[key] = value
+        elif self.save_pull_args is not None:
+            save_pull_args = self.save_pull_args
+
+        # check the save_pull_args for the save_pull_function if it's
+        # using inputs from the class definition, since that could be a
+        # confusing spot (defining args both in the class instantiation
+        # and in the method)
+        if check_args:
+            for key in self.save_pull_args_options[save_pull_function]:
+                if key not in save_pull_args:
+                    eh.add_dev_error(
+                        form,
+                        f"save_pull_args must include the key '{key}'")
+                    return None, None
+
+        return save_pull_function, save_pull_args
 
     def _check_register_user_info(
             self, new_email: str, new_username: str, new_password: str,
@@ -550,6 +750,12 @@ class Authenticate(object):
             message as a string, which will be handled by the error
             handler.
 
+            Only necessary if a) we want to email the user and b) the same
+            variable was not defined in the class instantiation. If we
+            defined the email method in the class instantiation and we
+            provide another here, the one here will override the one in
+            the class instantiation.
+
             The current pre-defined function types are:
 
             "gmail": the user wants to use their Gmail account to send
@@ -616,6 +822,12 @@ class Authenticate(object):
             The current pre-defined function types are:
                 'bigquery': Saves the credentials to a BigQuery table.
 
+            Only necessary if a) we want to save the credentials and b)
+            the save_pull_function variable was not defined in the class
+            instantiation. If we defined the save_pull_function method in
+            the class instantiation and we provide a value here, the one
+            here will override the one in the class instantiation.
+
             This is only necessary if you want to save the credentials to
             a database or other storage location. This can be useful so
             that you can confirm the credentials are saved during the
@@ -653,17 +865,23 @@ class Authenticate(object):
                 dataset. This does not need to have been created yet in
                 the project/dataset. If not, a new table will be created;
                 if so, it will be appended to.
+
+            Note that bq_creds, project and dataset could be defined in
+            the class instantiation, although they can be overwritten
+            here. table_name must be defined here.
         """
         # check on whether all session state inputs exist and are the
         # correct type and whether the inputs are within the correct set
         # of options
-        if not self._check_register_user_session_states(preauthorization) or \
-                not self._check_form_inputs(location, 'register_user'):
+        if not self._check_form_inputs(location, 'register_user'):
             return False
 
-        # we need all the usernames to be lowercase
-        st.session_state[self.usernames_session_state] = [
-            i.lower() for i in st.session_state[self.usernames_session_state]]
+        # set the email variables
+        email_user, email_inputs, email_creds = self._define_email_vars(
+            email_user, email_inputs, email_creds)
+        # set the credential saving variables
+        cred_save_function, cred_save_args = self._define_save_pull_vars(
+            'register_user', cred_save_function, cred_save_args)
 
         if location == 'main':
             register_user_form = st.form('Register user')
