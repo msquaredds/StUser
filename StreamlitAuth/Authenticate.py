@@ -2958,9 +2958,6 @@ class Authenticate(object):
             indicator, value = info_pull_function(**info_pull_args)
 
         # only continue if we didn't have any issues getting the info
-        st.write("info_type", info_type)
-        st.write("indicator", indicator)
-        st.write("value", value)
         if self._user_info_pull_error_handler(info_type, indicator, value):
             return value
         return False
@@ -2985,12 +2982,9 @@ class Authenticate(object):
             info_pull_function: Union[str, Callable],
             info_pull_args: dict, info: str) -> bool:
         """Check if the user's input matches the stored info."""
-        st.write("info_pull_function", info_pull_function)
-        st.write("info_pull_args", info_pull_args)
         if info_type in ('email', 'password'):
             pulled_info = self._pull_user_info(
                 info_type, username, info_pull_function, info_pull_args)
-            st.write("pulled_info", pulled_info)
             if pulled_info:
                 return self._check_info_match(pulled_info, info, info_type)
             else:
@@ -3100,10 +3094,6 @@ class Authenticate(object):
         if info_type == 'email':
             return new_info
         else:
-            st.write("_pull_email_address")
-            st.write("username", username)
-            st.write("info_pull_function", info_pull_function)
-            st.write("info_pull_args", info_pull_args)
             pulled_info = self._pull_user_info(
                 'email', username, info_pull_function, info_pull_args)
             if pulled_info:
@@ -3187,18 +3177,12 @@ class Authenticate(object):
         new_info = st.session_state[user_info_text_key_new]
         repeat_new_info = st.session_state[user_info_text_key_new_repeat]
         username = st.session_state.stauth['username']
-        st.write("info_type", info_type)
-        st.write("info", info)
-        st.write("new_info", new_info)
-        st.write("repeat_new_info", repeat_new_info)
-        st.write("username", username)
 
         # make sure the fields aren't blank
         if self._check_user_info(info_type, info, new_info, repeat_new_info):
             if info_type == 'password':
                 # all passwords must be hashed
                 new_info = Hasher([new_info]).generate()[0]
-                st.write("new_info password", new_info)
 
             # check if the user's info matches what is stored
             info_match = self._compare_user_info_to_stored(
