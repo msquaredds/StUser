@@ -62,7 +62,8 @@ class Authenticate(object):
             These should be saved into the session state before
             instantiating this class. We use session state since we want
             to be able to update the list of emails with the methods of
-            this class and want the updated list to persist.
+            this class and want the updated list to persist. Can set this
+            to None to ignore this feature.
         :param weak_passwords: The list of weak passwords that shouldn't
             be used. This isn't required, but is recommended.
         :param email_user: If we want to email the user after registering
@@ -175,7 +176,7 @@ class Authenticate(object):
         self.save_pull_args = save_pull_args
 
         if not self._check_class_session_states():
-            return
+            raise ValueError()
         else:
             # we need all the usernames and emails to be lowercase so the
             # user can't register with the same username or email but
@@ -192,7 +193,7 @@ class Authenticate(object):
             'bigquery': ['bq_creds', 'project', 'dataset']}
 
         if not self._check_class_save_pull():
-            return
+            raise ValueError()
 
         if 'stauth' not in st.session_state:
             st.session_state['stauth'] = {}
@@ -879,9 +880,14 @@ class Authenticate(object):
         # set the email variables
         email_user, email_inputs, email_creds = self._define_email_vars(
             email_user, email_inputs, email_creds)
+        st.write("email_user", email_user)
+        st.write("email_inputs", email_inputs)
+        st.write("email_creds", email_creds)
         # set the credential saving variables
         cred_save_function, cred_save_args = self._define_save_pull_vars(
             'register_user', cred_save_function, cred_save_args)
+        st.write("cred_save_function", cred_save_function)
+        st.write("cred_save_args", cred_save_args)
 
         if location == 'main':
             register_user_form = st.form('Register user')
