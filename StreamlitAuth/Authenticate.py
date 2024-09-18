@@ -289,7 +289,9 @@ class Authenticate(object):
             self,
             form: str,
             save_pull_function: Union[Callable, str] = None,
-            save_pull_args: dict = None) -> Tuple[Union[Callable, str], dict]:
+            save_pull_args: dict = None,
+            function_specific_args: list = None
+    ) -> Tuple[Union[Callable, str], dict]:
         """
         Define the save or pull variables as either the class save_pull
         variables or the ones passed in the method. We also add additional
@@ -312,8 +314,10 @@ class Authenticate(object):
         # using inputs from the class definition, since that could be a
         # confusing spot (defining args both in the class instantiation
         # and in the method)
+        args_to_check = self.save_pull_args_options[save_pull_function].extend(
+            function_specific_args)
         if check_args:
-            for key in self.save_pull_args_options[save_pull_function]:
+            for key in args_to_check:
                 if key not in save_pull_args:
                     eh.add_dev_error(
                         form,
