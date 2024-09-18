@@ -315,14 +315,9 @@ class Authenticate(object):
         # confusing spot (defining args both in the class instantiation
         # and in the method)
         if check_args:
-            st.write("save_pull_args_options", self.save_pull_args_options)
-            st.write("function_specific_args", function_specific_args)
-            st.write("save_pull_function", save_pull_function)
-            st.write(self.save_pull_args_options[save_pull_function])
             args_to_check = self.save_pull_args_options[save_pull_function]
             if function_specific_args is not None:
                 args_to_check.extend(function_specific_args)
-            st.write("args_to_check", args_to_check)
             for key in args_to_check:
                 if key not in save_pull_args:
                     eh.add_dev_error(
@@ -890,15 +885,10 @@ class Authenticate(object):
         # set the email variables
         email_user, email_inputs, email_creds = self._define_email_vars(
             email_user, email_inputs, email_creds)
-        st.write("email_user", email_user)
-        st.write("email_inputs", email_inputs)
-        st.write("email_creds", email_creds)
         # set the credential saving variables
         cred_save_function, cred_save_args = self._define_save_pull_vars(
             'register_user', cred_save_function, cred_save_args,
             ['table_name'])
-        st.write("cred_save_function", cred_save_function)
-        st.write("cred_save_args", cred_save_args)
         # this will return false for cred_save_function if there was an
         # error
         if not cred_save_function:
