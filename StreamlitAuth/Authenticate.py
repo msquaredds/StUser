@@ -314,15 +314,17 @@ class Authenticate(object):
         # using inputs from the class definition, since that could be a
         # confusing spot (defining args both in the class instantiation
         # and in the method)
-        st.write("save_pull_args_options", self.save_pull_args_options)
-        st.write("function_specific_args", function_specific_args)
-        if function_specific_args is not None:
-            args_to_check = self.save_pull_args_options[
-                save_pull_function].extend(function_specific_args)
-        else:
-            args_to_check = self.save_pull_args_options[save_pull_function]
-        st.write("args_to_check", args_to_check)
         if check_args:
+            st.write("save_pull_args_options", self.save_pull_args_options)
+            st.write("function_specific_args", function_specific_args)
+            st.write("save_pull_function", save_pull_function)
+            st.write(self.save_pull_args_options[save_pull_function])
+            if function_specific_args is not None:
+                args_to_check = list(self.save_pull_args_options[
+                    save_pull_function]).extend(function_specific_args)
+            else:
+                args_to_check = self.save_pull_args_options[save_pull_function]
+            st.write("args_to_check", args_to_check)
             for key in args_to_check:
                 if key not in save_pull_args:
                     eh.add_dev_error(
