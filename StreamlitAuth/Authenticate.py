@@ -290,30 +290,39 @@ class Authenticate(object):
             form: str,
             save_pull_function: Union[Callable, str] = None,
             save_pull_args: dict = None,
-            function_specific_args: list = None
-    ) -> Tuple[Union[Callable, str], dict]:
+            function_specific_args: list = None,
+            secondary_function: Union[Callable, str] = None,
+            secondary_args: dict = None) -> Tuple[Union[Callable, str], dict]:
         """
         Define the save or pull variables as either the class save_pull
-        variables or the ones passed in the method. We also add additional
-        args that were defined in the method, since they are unique.
+        variables or the ones passed in the method. Can also compare
+        against a secondary function/args instead of the class. We also
+        add additional args that were defined in the method, since they
+        are unique.
         """
-        if save_pull_function is None and self.save_pull_function is not None:
-            save_pull_function = self.save_pull_function
+        if secondary_function is None:
+            secondary_function = self.save_pull_function
+        if secondary_args is None:
+            secondary_args = self.save_pull_args
+
+        if save_pull_function is None and secondary_function is not None:
+            save_pull_function = secondary_function
+
+        if save_pull_args is not None and secondary_args is not None:
+            for key, value in secondary_args.items():
+                if key not in save_pull_args:
+                    save_pull_args[key] = value
+            check_args = True
+        elif secondary_args is not None:
+            save_pull_args = secondary_args
             check_args = True
         else:
             check_args = False
 
-        if save_pull_args is not None and self.save_pull_args is not None:
-            for key, value in self.save_pull_args.items():
-                if key not in save_pull_args:
-                    save_pull_args[key] = value
-        elif self.save_pull_args is not None:
-            save_pull_args = self.save_pull_args
-
         # check the save_pull_args for the save_pull_function if it's
         # using inputs from the class definition, since that could be a
-        # confusing spot (defining args both in the class instantiation
-        # and in the method)
+        # confusing spot (potentially defining args both in the class
+        # instantiation and in the method)
         if check_args:
             args_to_check = self.save_pull_args_options[save_pull_function]
             if function_specific_args is not None:
@@ -756,8 +765,8 @@ class Authenticate(object):
             message as a string, which will be handled by the error
             handler.
 
-            Only necessary if a) we want to email the user and b) the same
-            variable was not defined in the class instantiation. If we
+            Only necessary if a) we want to email the user and b)
+            email_user was not defined in the class instantiation. If we
             defined the email method in the class instantiation and we
             provide another here, the one here will override the one in
             the class instantiation.
@@ -929,20 +938,127 @@ class Authenticate(object):
         else:
             return False
 
-    def _check_login_session_states(self) -> bool:
+    def _define_login_functions_args(
+            self,
+            password_pull_function: Union[str, Callable],
+            password_pull_args: dict,
+            all_locked_function: str,
+            all_locked_args: dict,
+            locked_info_function: Union[str, Callable],
+            locked_info_args: dict,
+            store_locked_time_function: Union[str, Callable],
+            store_locked_time_args: dict,
+            store_unlocked_time_function: Union[str, Callable],
+            store_unlocked_time_args: dict,
+            all_incorrect_attempts_function: str,
+            all_incorrect_attempts_args: dict,
+            store_incorrect_attempts_function: Union[str, Callable],
+            store_incorrect_attempts_args: dict,
+            pull_incorrect_attempts_function: Union[str, Callable],
+            pull_incorrect_attempts_args: dict
+    ) -> Tuple[bool, Union[tuple, None]]:
         """
-        Check on whether all session state inputs for login exist and are
-        the correct type.
+        Define the functions and arguments that are needed for the
+            login method. Uses a hierarchy method, where the highest level
+            allows you to define the least, but if you define a lower
+            level that will override any higher levels.
+
+        Hierarchy:
+        1. Class definition (self.save_pull_function, self.save_pull_args)
+            a. General method definition (all_locked_function,
+                                          all_locked_args)
+                i. Specific method def. (locked_info_function,
+                                         locked_info_args)
+                ii. Specific method def. (store_locked_time_function,
+                                          store_locked_time_args)
+                iii. Specific method def. (store_unlocked_time_function,
+                                           store_unlocked_time_args)
+            b. General method definition (all_incorrect_attempts_function,
+                                          all_incorrect_attempts_args)
+                i. Specific method def. (store_incorrect_attempts_function,
+                                         store_incorrect_attempts_args)
+                ii. Specific method def. (pull_incorrect_attempts_function,
+                                          pull_incorrect_attempts_args)
+            c. General/specific method def. (password_pull_function,
+                                             password_pull_args)
         """
-        if self.usernames_session_state not in st.session_state or \
-                not isinstance(st.session_state[self.usernames_session_state],
-                               (list, set)):
-            eh.add_dev_error(
+        password_pull_function, password_pull_args = self._define_save_pull_vars(
+            'login',
+            password_pull_function, password_pull_args,
+            ['table_name', 'username_col', 'password_col'])
+        # this will return false for all_locked_function if there was an
+        # error
+        if not password_pull_function:
+            return False, None
+
+        all_locked_function, all_locked_args = self._define_save_pull_vars(
+            'login',
+            all_locked_function, all_locked_args,
+            ['table_name', 'username_col', 'locked_time_col',
+             'unlocked_time_col'])
+        if not all_locked_function:
+            return False, None
+        locked_info_function, locked_info_args = self._define_save_pull_vars(
+            'login',
+            locked_info_function, locked_info_args,
+            ['table_name', 'username_col', 'locked_time_col',
+             'unlocked_time_col'],
+            all_locked_function, all_locked_args)
+        if not locked_info_function:
+            return False, None
+        store_locked_time_function, store_locked_time_args = (
+            self._define_save_pull_vars(
                 'login',
-                "usernames_session_state must be a list or set "
-                "assigned to st.session_state[usernames_session_state]")
-            return False
-        return True
+                store_locked_time_function, store_locked_time_args,
+                ['table_name', 'username_col', 'locked_time_col',
+                'unlocked_time_col'],
+                all_locked_function, all_locked_args))
+        if not store_locked_time_function:
+            return False, None
+        store_unlocked_time_function, store_unlocked_time_args = (
+            self._define_save_pull_vars(
+                'login',
+                store_unlocked_time_function, store_unlocked_time_args,
+                ['table_name', 'username_col', 'locked_time_col',
+                'unlocked_time_col'],
+                all_locked_function, all_locked_args))
+        if not store_unlocked_time_function:
+            return False, None
+
+        all_incorrect_attempts_function, all_incorrect_attempts_args = (
+            self._define_save_pull_vars(
+                'login',
+                all_incorrect_attempts_function, all_incorrect_attempts_args,
+                ['table_name', 'username_col', 'datetime_col']))
+        if not all_incorrect_attempts_function:
+            return False, None
+        store_incorrect_attempts_function, store_incorrect_attempts_args = (
+            self._define_save_pull_vars(
+            'login',
+                store_incorrect_attempts_function,
+                store_incorrect_attempts_args,
+                ['table_name', 'username_col', 'datetime_col'],
+                all_incorrect_attempts_function, all_incorrect_attempts_args))
+        if not store_incorrect_attempts_function:
+            return False, None
+        pull_incorrect_attempts_function, pull_incorrect_attempts_args = (
+            self._define_save_pull_vars(
+            'login',
+                pull_incorrect_attempts_function, pull_incorrect_attempts_args,
+                ['table_name', 'username_col', 'datetime_col'],
+                all_incorrect_attempts_function, all_incorrect_attempts_args))
+        if not pull_incorrect_attempts_function:
+            return False, None
+
+        return (True,
+                (password_pull_function, password_pull_args,
+                 locked_info_function, locked_info_args,
+                 store_locked_time_function, store_locked_time_args,
+                 store_unlocked_time_function, store_unlocked_time_args,
+                 store_incorrect_attempts_function,
+                 store_incorrect_attempts_args,
+                 pull_incorrect_attempts_function,
+                 pull_incorrect_attempts_args))
 
     def _check_storage_functions(
             self,
@@ -1944,12 +2060,16 @@ class Authenticate(object):
               password_pull_args: dict = None,
               incorrect_attempts: int = 10,
               locked_hours: int = 24,
+              all_locked_function: str = None,
+              all_locked_args: dict = None,
               locked_info_function: Union[str, Callable] = None,
               locked_info_args: dict = None,
               store_locked_time_function: Union[str, Callable] = None,
               store_locked_time_args: dict = None,
               store_unlocked_time_function: Union[str, Callable] = None,
               store_unlocked_time_args: dict = None,
+              all_incorrect_attempts_function: str = None,
+              all_incorrect_attempts_args: dict = None,
               store_incorrect_attempts_function: Union[str, Callable] = None,
               store_incorrect_attempts_args: dict = None,
               pull_incorrect_attempts_function: Union[str, Callable] = None,
@@ -1986,6 +2106,10 @@ class Authenticate(object):
             associated with the username. This can be a callable function
             or a string.
 
+            Only necessary if the save_pull_function was not defined
+            in the class instantiation. But if defined here, it will
+            override the class instantiation.
+
             At a minimum, a callable function should take 'username' as
             an argument, but can include other arguments as well.
             A callable function should return:
@@ -2008,6 +2132,9 @@ class Authenticate(object):
         :param password_pull_args: Arguments for the
             password_pull_function.
 
+            Only necessary if password_pull_function is defined when you
+            call this method.
+
             If using 'bigquery' as your password_pull_function, the
             following arguments are required:
 
@@ -2023,6 +2150,11 @@ class Authenticate(object):
                 table that contains the usernames.
             password_col (str): The name of the column in the BigQuery
                 table that contains the passwords.
+
+            Note that bq_creds, project and dataset could be defined in
+            the class instantiation, although they can be overwritten
+            here. table_name, username_col and password_col must be
+            defined here.
         :param incorrect_attempts: The number of incorrect attempts
             allowed before the account is locked.
         :param locked_hours: The number of hours the account is locked
@@ -2040,9 +2172,57 @@ class Authenticate(object):
         attempts and if an account is locked or not, but that can easily
         be disregarded by refreshing the website.
 
+        :param all_locked_function: Since all the lock-type functions
+            below behave similarly, you can define all of them at once
+            here if the input is a string. For example, you could say
+            all_locked_function='bigquery'. However, since each function
+            behaves somewhat differently at the detailed level, you cannot
+            supply a function here.
+
+            This replaces the need to define locked_info_function,
+            store_locked_time_function and store_unlocked_time_function.
+
+            Only necessary if the save_pull_function was not defined
+            in the class instantiation. But if defined here, it will
+            override the class instantiation.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls ans stores the locked and unlocked
+                datetimes from a BigQuery table.
+        :param all_locked_args: If all_locked_function is defined, you
+            can supply the arguments for the type of function here. For
+            example, if using 'bigquery', you would supply:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            username_col (str): The name of the column in the BigQuery
+                table that contains the usernames.
+            locked_time_col (str): The name of the column in the BigQuery
+                table that contains the locked_times.
+            unlocked_time_col (str): The name of the column in the
+                BigQuery table that contains the unlocked_times.
+
+            Only necessary if all_locked_function is defined when you
+            call this method.
+
+            Note that bq_creds, project and dataset could be defined in
+            the class instantiation, although they can be overwritten
+            here. table_name, username_col, locked_time_col and
+            unlocked_time_col must be defined here.
         :param locked_info_function: The function to pull the locked
             information associated with the username. This can be a
             callable function or a string.
+
+            Only necessary if both a) the save_pull_function was not
+            defined in the class instantiation and b) all_locked_function
+            was not defind in this method. But if defined here, it will
+            override either of those.
 
             The function should pull in locked_info_args, which can be
             used for things like accessing and pulling from a database.
@@ -2075,6 +2255,9 @@ class Authenticate(object):
             like database name, table name, credentials to log into the
             database, etc.
 
+            Only necessary if locked_info_function is defined when you
+            call this method.
+
             If using 'bigquery' as your locked_info_function, the
             following arguments are required:
 
@@ -2092,9 +2275,19 @@ class Authenticate(object):
                 table that contains the locked_times.
             unlocked_time_col (str): The name of the column in the
                 BigQuery table that contains the unlocked_times.
+
+            Note that bq_creds, project and dataset could be defined in
+            the class instantiation, although they can be overwritten
+            here. table_name, username_col, locked_time_col and
+            unlocked_time_col must be defined here.
         :param store_locked_time_function: The function to store the
             locked datetime associated with the username. This can be a
             callable function or a string.
+
+            Only necessary if both a) the save_pull_function was not
+            defined in the class instantiation and b) all_locked_function
+            was not defind in this method. But if defined here, it will
+            override either of those.
 
             The function should pull in store_locked_time_args, which can
             be used for things like accessing and storing to a database.
@@ -2119,6 +2312,9 @@ class Authenticate(object):
             should include things like database name, table name,
             credentials to log into the database, etc.
 
+            Only necessary if store_locked_time_function is defined when
+            you call this method.
+
             If using 'bigquery' as your store_locked_time_function, the
             following arguments are required:
 
@@ -2136,6 +2332,11 @@ class Authenticate(object):
                 table that contains the locked_times.
             unlocked_time_col (str): The name of the column in the
                 BigQuery table that contains the unlocked_times.
+
+            Note that bq_creds, project and dataset could be defined in
+            the class instantiation, although they can be overwritten
+            here. table_name, username_col, locked_time_col and
+            unlocked_time_col must be defined here.
         :param store_unlocked_time_function: The function to store the
             unlocked times associated with the username. See
             store_locked_time_function above - this just stores the unlock
@@ -2144,6 +2345,47 @@ class Authenticate(object):
             store_unlocked_times_function. See
             store_locked_time_args above - these variable will be the same
             here.
+        :param all_incorrect_attempts_function: Since all the
+            incorrect attempts-type functions below behave similarly,
+            you can define all of them at once here if the input is a
+            string. For example, you could say
+            all_incorrect_attempts_function='bigquery'. However, since
+            each function behaves somewhat differently at the detailed
+            level, you cannot supply a function here.
+
+            This replaces the need to define
+            store_incorrect_attempts_function and
+            pull_incorrect_attempts_function.
+
+            Only necessary if the save_pull_function was not defined
+            in the class instantiation. But if defined here, it will
+            override the class instantiation.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls and stores the incorrect attempts from a
+                    BigQuery table.
+        :param all_incorrect_attempts_args: If
+            all_incorrect_attempts_function is defined, you can supply the
+            arguments for the type of function here. For example, if using
+            'bigquery', you would supply:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            username_col (str): The name of the column in the BigQuery
+                table that contains the usernames.
+            datetime_col (str): The name of the column in the BigQuery
+                table that contains the datetime.
+
+            Note that bq_creds, project and dataset could be defined in
+            the class instantiation, although they can be overwritten
+            here. table_name, username_col and datetime_col must be
+            defined here.
         :param store_incorrect_attempts_function: The function to store
             the datetime and username when an incorrect login attempt
             occurs. This can be a callable function or a string. At a
@@ -2153,6 +2395,11 @@ class Authenticate(object):
             can be used for things like accessing and storing to a
             database. A callable function can return an error message as a
             string, which our error handler will handle.
+
+            Only necessary if both a) the save_pull_function was not
+            defined in the class instantiation and b)
+            all_incorrect_attempts_function was not defind in this method.
+            But if defined here, it will override either of those.
 
             The current pre-defined function types are:
                 'bigquery': Stores the attempted datetime to a BigQuery
@@ -2170,6 +2417,9 @@ class Authenticate(object):
             Instead, it should include things like database name, table
             name, credentials to log into the database, etc.
 
+            Only necessary if store_incorrect_attempts_function is defined
+            when you call this method.
+
             If using 'bigquery' as your store_incorrect_attempts_function,
             the following arguments are required:
 
@@ -2185,9 +2435,19 @@ class Authenticate(object):
                 table that contains the usernames.
             datetime_col (str): The name of the column in the BigQuery
                 table that contains the datetime.
+
+            Note that bq_creds, project and dataset could be defined in
+            the class instantiation, although they can be overwritten
+            here. table_name, username_col and datetime_col must be
+            defined here.
         :param pull_incorrect_attempts_function: The function to pull the
             datetimes associated with a username for incorrect login
             attempts. This can be a callable function or a string.
+
+            Only necessary if both a) the save_pull_function was not
+            defined in the class instantiation and b)
+            all_incorrect_attempts_function was not defind in this method.
+            But if defined here, it will override either of those.
 
             The function should pull in pull_incorrect_attempts_args,
             which can be used for things like accessing and pulling from a
@@ -2219,6 +2479,9 @@ class Authenticate(object):
             Instead, it should include things like database name, table
             name, credentials to log into the database, etc.
 
+            Only necessary if pull_incorrect_attempts_function is defined
+            when you call this method.
+
             If using 'bigquery' as your pull_incorrect_attempts_function,
             the following arguments are required:
 
@@ -2234,10 +2497,36 @@ class Authenticate(object):
                 table that contains the usernames.
             datetime_col (str): The name of the column in the BigQuery
                 table that contains the datetime.
+
+            Note that bq_creds, project and dataset could be defined in
+            the class instantiation, although they can be overwritten
+            here. table_name, username_col and datetime_col must be
+            defined here.
         """
+        # choose the correct save & pull functions & arguments, as well
+        # as the correct incorrect attempts functions and arguments
+        (funcs_args_defined,
+         (password_pull_function, password_pull_args,
+          locked_info_function, locked_info_args,
+          store_locked_time_function, store_locked_time_args,
+          store_unlocked_time_function, store_unlocked_time_args,
+          store_incorrect_attempts_function,
+          store_incorrect_attempts_args,
+          pull_incorrect_attempts_function,
+          pull_incorrect_attempts_args)) = self._define_login_functions_args(
+            password_pull_function, password_pull_args,
+            all_locked_function, all_locked_args,
+            locked_info_function, locked_info_args,
+            store_locked_time_function, store_locked_time_args,
+            store_unlocked_time_function, store_unlocked_time_args,
+            all_incorrect_attempts_function, all_incorrect_attempts_args,
+            store_incorrect_attempts_function, store_incorrect_attempts_args,
+            pull_incorrect_attempts_function, pull_incorrect_attempts_args)
+        if not funcs_args_defined:
+            return False
+
         # check whether the inputs are within the correct set of options
-        if not self._check_login_session_states() or \
-                not self._check_form_inputs(location, 'login') or \
+        if not self._check_form_inputs(location, 'login') or \
                 not self._check_storage_functions(
                     locked_info_function, store_locked_time_function,
                     store_unlocked_time_function,
