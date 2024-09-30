@@ -2505,25 +2505,29 @@ class Authenticate(object):
         """
         # choose the correct save & pull functions & arguments, as well
         # as the correct incorrect attempts functions and arguments
-        (funcs_args_defined,
-         (password_pull_function, password_pull_args,
-          locked_info_function, locked_info_args,
-          store_locked_time_function, store_locked_time_args,
-          store_unlocked_time_function, store_unlocked_time_args,
-          store_incorrect_attempts_function,
-          store_incorrect_attempts_args,
-          pull_incorrect_attempts_function,
-          pull_incorrect_attempts_args)) = self._define_login_functions_args(
-            password_pull_function, password_pull_args,
-            all_locked_function, all_locked_args,
-            locked_info_function, locked_info_args,
-            store_locked_time_function, store_locked_time_args,
-            store_unlocked_time_function, store_unlocked_time_args,
-            all_incorrect_attempts_function, all_incorrect_attempts_args,
-            store_incorrect_attempts_function, store_incorrect_attempts_args,
-            pull_incorrect_attempts_function, pull_incorrect_attempts_args)
+        funcs_args_defined, funcs_and_args = (
+            self._define_login_functions_args(
+                password_pull_function, password_pull_args,
+                all_locked_function, all_locked_args,
+                locked_info_function, locked_info_args,
+                store_locked_time_function, store_locked_time_args,
+                store_unlocked_time_function, store_unlocked_time_args,
+                all_incorrect_attempts_function, all_incorrect_attempts_args,
+                store_incorrect_attempts_function,
+                store_incorrect_attempts_args,
+                pull_incorrect_attempts_function,
+                pull_incorrect_attempts_args))
         if not funcs_args_defined:
             return False
+        else:
+            (password_pull_function, password_pull_args,
+             locked_info_function, locked_info_args,
+             store_locked_time_function, store_locked_time_args,
+             store_unlocked_time_function, store_unlocked_time_args,
+             store_incorrect_attempts_function,
+             store_incorrect_attempts_args,
+             pull_incorrect_attempts_function,
+             pull_incorrect_attempts_args) = funcs_and_args
 
         # check whether the inputs are within the correct set of options
         if not self._check_form_inputs(location, 'login') or \
