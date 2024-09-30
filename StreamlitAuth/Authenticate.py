@@ -304,7 +304,7 @@ class Authenticate(object):
         if secondary_function is None:
             secondary_function = self.save_pull_function
         if secondary_args is None:
-            secondary_args = self.save_pull_args
+            secondary_args = self.save_pull_args.copy()
 
         if save_pull_function is None and secondary_function is not None:
             save_pull_function = secondary_function
@@ -989,6 +989,7 @@ class Authenticate(object):
             'login', 'password_pull_args',
             password_pull_function, password_pull_args,
             ['table_name', 'username_col', 'password_col'])
+        st.write("password_pull_args", password_pull_args)
         # this will return false for all_locked_function if there was an
         # error
         if not password_pull_function:
@@ -999,6 +1000,7 @@ class Authenticate(object):
             all_locked_function, all_locked_args,
             ['table_name', 'username_col', 'locked_time_col',
              'unlocked_time_col'])
+        st.write("all_locked_args", all_locked_args)
         if not all_locked_function:
             return False, None
         locked_info_function, locked_info_args = self._define_save_pull_vars(
@@ -1007,6 +1009,7 @@ class Authenticate(object):
             ['table_name', 'username_col', 'locked_time_col',
              'unlocked_time_col'],
             all_locked_function, all_locked_args)
+        st.write("locked_info_args", locked_info_args)
         if not locked_info_function:
             return False, None
         store_locked_time_function, store_locked_time_args = (
@@ -1016,6 +1019,7 @@ class Authenticate(object):
                 ['table_name', 'username_col', 'locked_time_col',
                 'unlocked_time_col'],
                 all_locked_function, all_locked_args))
+        st.write("store_locked_time_args", store_locked_time_args)
         if not store_locked_time_function:
             return False, None
         store_unlocked_time_function, store_unlocked_time_args = (
@@ -1025,6 +1029,7 @@ class Authenticate(object):
                 ['table_name', 'username_col', 'locked_time_col',
                 'unlocked_time_col'],
                 all_locked_function, all_locked_args))
+        st.write("store_unlocked_time_args", store_unlocked_time_args)
         if not store_unlocked_time_function:
             return False, None
 
