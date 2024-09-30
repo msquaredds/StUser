@@ -288,6 +288,7 @@ class Authenticate(object):
     def _define_save_pull_vars(
             self,
             form: str,
+            target_args_name: str,
             save_pull_function: Union[Callable, str] = None,
             save_pull_args: dict = None,
             function_specific_args: list = None,
@@ -331,7 +332,9 @@ class Authenticate(object):
                 if key not in save_pull_args:
                     eh.add_dev_error(
                         form,
-                        f"save_pull_args must include the key '{key}'")
+                        f"save_pull_args for the form {form} and "
+                        f"target args {target_args_name} must include the "
+                        f"key '{key}'")
                     return False, None
 
         return save_pull_function, save_pull_args
@@ -896,8 +899,8 @@ class Authenticate(object):
             email_user, email_inputs, email_creds)
         # set the credential saving variables
         cred_save_function, cred_save_args = self._define_save_pull_vars(
-            'register_user', cred_save_function, cred_save_args,
-            ['table_name'])
+            'register_user', 'cred_save_args',
+            cred_save_function, cred_save_args, ['table_name'])
         # this will return false for cred_save_function if there was an
         # error
         if not cred_save_function:
@@ -983,7 +986,7 @@ class Authenticate(object):
                                              password_pull_args)
         """
         password_pull_function, password_pull_args = self._define_save_pull_vars(
-            'login',
+            'login', 'password_pull_args',
             password_pull_function, password_pull_args,
             ['table_name', 'username_col', 'password_col'])
         # this will return false for all_locked_function if there was an
@@ -992,14 +995,14 @@ class Authenticate(object):
             return False, None
 
         all_locked_function, all_locked_args = self._define_save_pull_vars(
-            'login',
+            'login', 'all_locked_args',
             all_locked_function, all_locked_args,
             ['table_name', 'username_col', 'locked_time_col',
              'unlocked_time_col'])
         if not all_locked_function:
             return False, None
         locked_info_function, locked_info_args = self._define_save_pull_vars(
-            'login',
+            'login', 'locked_info_args',
             locked_info_function, locked_info_args,
             ['table_name', 'username_col', 'locked_time_col',
              'unlocked_time_col'],
@@ -1008,7 +1011,7 @@ class Authenticate(object):
             return False, None
         store_locked_time_function, store_locked_time_args = (
             self._define_save_pull_vars(
-                'login',
+                'login', 'store_locked_time_args',
                 store_locked_time_function, store_locked_time_args,
                 ['table_name', 'username_col', 'locked_time_col',
                 'unlocked_time_col'],
@@ -1017,7 +1020,7 @@ class Authenticate(object):
             return False, None
         store_unlocked_time_function, store_unlocked_time_args = (
             self._define_save_pull_vars(
-                'login',
+                'login', 'store_unlocked_time_args',
                 store_unlocked_time_function, store_unlocked_time_args,
                 ['table_name', 'username_col', 'locked_time_col',
                 'unlocked_time_col'],
@@ -1027,14 +1030,14 @@ class Authenticate(object):
 
         all_incorrect_attempts_function, all_incorrect_attempts_args = (
             self._define_save_pull_vars(
-                'login',
+                'login', 'all_incorrect_attempts_args',
                 all_incorrect_attempts_function, all_incorrect_attempts_args,
                 ['table_name', 'username_col', 'datetime_col']))
         if not all_incorrect_attempts_function:
             return False, None
         store_incorrect_attempts_function, store_incorrect_attempts_args = (
             self._define_save_pull_vars(
-            'login',
+            'login', 'store_incorrect_attempts_args',
                 store_incorrect_attempts_function,
                 store_incorrect_attempts_args,
                 ['table_name', 'username_col', 'datetime_col'],
@@ -1043,7 +1046,7 @@ class Authenticate(object):
             return False, None
         pull_incorrect_attempts_function, pull_incorrect_attempts_args = (
             self._define_save_pull_vars(
-            'login',
+            'login', 'pull_incorrect_attempts_args',
                 pull_incorrect_attempts_function, pull_incorrect_attempts_args,
                 ['table_name', 'username_col', 'datetime_col'],
                 all_incorrect_attempts_function, all_incorrect_attempts_args))
