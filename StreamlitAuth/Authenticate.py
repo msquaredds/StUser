@@ -304,7 +304,10 @@ class Authenticate(object):
         if secondary_function is None:
             secondary_function = self.save_pull_function
         if secondary_args is None:
-            secondary_args = self.save_pull_args.copy()
+            if self.save_pull_args is not None:
+                secondary_args = self.save_pull_args.copy()
+            else:
+                secondary_args = None
 
         if save_pull_function is None and secondary_function is not None:
             save_pull_function = secondary_function
@@ -320,14 +323,18 @@ class Authenticate(object):
         else:
             check_args = False
 
+        st.write("save_pull_args", save_pull_args)
+
         # check the save_pull_args for the save_pull_function if it's
         # using inputs from the class definition, since that could be a
         # confusing spot (potentially defining args both in the class
         # instantiation and in the method)
         if check_args:
-            args_to_check = self.save_pull_args_options[save_pull_function]
+            args_to_check = self.save_pull_args_options[
+                save_pull_function].copy()
             if function_specific_args is not None:
                 args_to_check.extend(function_specific_args)
+            st.write("args_to_check", args_to_check)
             for key in args_to_check:
                 if key not in save_pull_args:
                     eh.add_dev_error(
