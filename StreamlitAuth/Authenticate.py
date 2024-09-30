@@ -240,7 +240,9 @@ class Authenticate(object):
         Check on whether the save_pull_function and save_pull_args are
         within the correct set of options.
         """
-        if not self.save_pull_function in self.save_pull_function_options:
+        if (self.save_pull_function is not None and
+                not self.save_pull_function in
+                    self.save_pull_function_options):
             eh.add_dev_error(
                 'class_instantiation',
                 f"save_pull_function must be a string "
