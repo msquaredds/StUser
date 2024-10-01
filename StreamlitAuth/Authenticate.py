@@ -319,7 +319,8 @@ class Authenticate(object):
             save_pull_function: Union[Callable, str] = None,
             save_pull_args: dict = None,
             secondary_function: Union[Callable, str] = None,
-            secondary_args: dict = None) -> Tuple[Union[Callable, str], dict]:
+            secondary_args: dict = None,
+            check_args: bool = True) -> Tuple[Union[Callable, str], dict]:
         """
         Define the save or pull variables as either the class save_pull
         variables or the ones passed in the method with the method
@@ -344,6 +345,12 @@ class Authenticate(object):
             against and be used if the save_pull_args is None. If
             save_pull_args is not None but secondary_args has additional
             arguments, those arguments will be added to save_pull_args.
+        :param check_args: Whether to check the arguments against the
+            expected args for the given function. This is useful if you
+            have a three-level hierarchy and you define something at the
+            first level and third level. You might not want to check the
+            second level since some of the arguments are defined at the
+            third level.
         :return save_pull_function: The save or pull function to use. Or
             False if the args are incorrect.
         :return save_pull_args: The save or pull arguments to use. Or None
@@ -379,14 +386,13 @@ class Authenticate(object):
         # check the save_pull_args since this could be a confusing spot
         # as we are potentially defining args both in the class
         # instantiation and in the method
-        if (save_pull_function is not None and
+        if (check_args and
+                save_pull_function is not None and
                 isinstance(save_pull_function, str) and
                 save_pull_function in self.save_pull_function_options):
             args_to_check = self.save_pull_args_options[
                 save_pull_function].copy()
-            if (isinstance(save_pull_function, str) and
-                    save_pull_function in
-                    self.save_pull_args_function_specific):
+            if save_pull_function in self.save_pull_args_function_specific:
                 args_to_check.extend(self.save_pull_args_function_specific[
                     save_pull_function][target_args_name])
 
