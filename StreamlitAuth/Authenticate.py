@@ -1069,7 +1069,7 @@ class Authenticate(object):
 
         all_locked_function, all_locked_args = self._define_save_pull_vars(
             'login', 'all_locked_args',
-            all_locked_function, all_locked_args)
+            all_locked_function, all_locked_args, check_args=False)
         st.write("all_locked_function", all_locked_function)
         st.write("all_locked_args", all_locked_args)
         if all_locked_function is not None and not all_locked_function:
@@ -1106,7 +1106,8 @@ class Authenticate(object):
         all_incorrect_attempts_function, all_incorrect_attempts_args = (
             self._define_save_pull_vars(
                 'login', 'all_incorrect_attempts_args',
-                all_incorrect_attempts_function, all_incorrect_attempts_args))
+                all_incorrect_attempts_function, all_incorrect_attempts_args,
+                check_args=False))
         if (all_incorrect_attempts_function is not None and
                 not all_incorrect_attempts_function):
             return False, None
