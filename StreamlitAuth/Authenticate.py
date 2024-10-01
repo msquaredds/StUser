@@ -1,3 +1,4 @@
+import copy
 import pandas as pd
 import secrets
 import streamlit as st
@@ -191,6 +192,29 @@ class Authenticate(object):
         self.save_pull_function_options = ['bigquery']
         self.save_pull_args_options = {
             'bigquery': ['bq_creds', 'project', 'dataset']}
+        self.save_pull_args_function_specific = {
+            'bigquery': {
+                'cred_save_args': ['table_name'],
+                'password_pull_args':
+                    ['table_name', 'username_col', 'password_col'],
+                'all_locked_args':
+                    ['table_name', 'username_col', 'locked_time_col',
+                     'unlocked_time_col'],
+                'locked_info_args':
+                    ['table_name', 'username_col', 'locked_time_col',
+                     'unlocked_time_col'],
+                'store_locked_time_args':
+                    ['table_name', 'username_col', 'locked_time_col',
+                     'unlocked_time_col'],
+                'store_unlocked_time_args':
+                    ['table_name', 'username_col', 'locked_time_col',
+                     'unlocked_time_col'],
+                'all_incorrect_attempts_args':
+                    ['table_name', 'username_col', 'datetime_col'],
+                'store_incorrect_attempts_args':
+                    ['table_name', 'username_col', 'datetime_col'],
+                'pull_incorrect_attempts_args':
+                    ['table_name', 'username_col', 'datetime_col']}}
 
         if not self._check_class_save_pull():
             raise ValueError()
@@ -249,12 +273,12 @@ class Authenticate(object):
                 f"with any of the values in {self.save_pull_function_options}")
             return False
         if (self.save_pull_args is not None and
-                not all(arg in self.save_pull_args_options[
-                    self.save_pull_function] for arg in self.save_pull_args)):
+                (self.save_pull_args_options[self.save_pull_function] !=
+                 list(self.save_pull_args.keys()))):
             eh.add_dev_error(
                 'class_instantiation',
                 f"save_pull_args must be a dictionary with keys "
-                f"from {self.save_pull_args_options[self.save_pull_function]}")
+                f"{self.save_pull_args_options[self.save_pull_function]}")
             return False
         return True
 
@@ -293,15 +317,36 @@ class Authenticate(object):
             target_args_name: str,
             save_pull_function: Union[Callable, str] = None,
             save_pull_args: dict = None,
-            function_specific_args: list = None,
             secondary_function: Union[Callable, str] = None,
             secondary_args: dict = None) -> Tuple[Union[Callable, str], dict]:
         """
         Define the save or pull variables as either the class save_pull
-        variables or the ones passed in the method. Can also compare
-        against a secondary function/args instead of the class. We also
-        add additional args that were defined in the method, since they
-        are unique.
+        variables or the ones passed in the method with the method
+        variables having preference. Can also compare against a secondary
+        function/args instead of the class.
+
+        We also check that the set of arguments is correct for the
+        function being used, as long as the function is a predefined one.
+
+        :param form: The name of the form that this function is being
+            called from. Used for error messages.
+        :param target_args_name: The name of the target args that we are
+            creating/checking. Used for pulling the correct args to check
+            against and for any error messages.
+        :param save_pull_function: The save or pull function to use, being
+            passed in from the method.
+        :param save_pull_args: The save or pull arguments to use, being
+            passed in from the method.
+        :param secondary_function: The save or pull function to compare
+            against and be used if the save_pull_function is None.
+        :param secondary_args: The save or pull arguments to compare
+            against and be used if the save_pull_args is None. If
+            save_pull_args is not None but secondary_args has additional
+            arguments, those arguments will be added to save_pull_args.
+        :return save_pull_function: The save or pull function to use. Or
+            False if the args are incorrect.
+        :return save_pull_args: The save or pull arguments to use. Or None
+            if the args are incorrect.
         """
         if secondary_function is None:
             secondary_function = self.save_pull_function
@@ -318,33 +363,34 @@ class Authenticate(object):
             for key, value in secondary_args.items():
                 if key not in save_pull_args:
                     save_pull_args[key] = value
-            check_args = True
         elif secondary_args is not None:
-            save_pull_args = secondary_args
-            check_args = True
-        else:
-            check_args = False
+            save_pull_args = copy.deepcopy(secondary_args)
 
         st.write("save_pull_args", save_pull_args)
 
-        # check the save_pull_args for the save_pull_function if it's
-        # using inputs from the class definition, since that could be a
-        # confusing spot (potentially defining args both in the class
-        # instantiation and in the method)
-        if check_args:
+        # check the save_pull_args since this could be a confusing spot
+        # as we are potentially defining args both in the class
+        # instantiation and in the method
+        if (save_pull_function is not None and
+                isinstance(save_pull_function, str) and
+                save_pull_function in self.save_pull_function_options):
             args_to_check = self.save_pull_args_options[
                 save_pull_function].copy()
-            if function_specific_args is not None:
-                args_to_check.extend(function_specific_args)
+            if (isinstance(save_pull_function, str) and
+                    save_pull_function in
+                    self.save_pull_args_function_specific):
+                args_to_check.extend(self.save_pull_args_function_specific[
+                    save_pull_function][target_args_name])
+
             st.write("args_to_check", args_to_check)
-            for key in args_to_check:
-                if key not in save_pull_args:
-                    eh.add_dev_error(
-                        form,
-                        f"save_pull_args for the form {form} and "
-                        f"target args {target_args_name} must include the "
-                        f"key '{key}'")
-                    return False, None
+
+            if args_to_check != list(save_pull_args.keys()):
+                eh.add_dev_error(
+                    form,
+                    f"save_pull_args for the form {form} and "
+                    f"target args {target_args_name} must include the "
+                    f"keys {args_to_check} and only those keys")
+                return False, None
 
         return save_pull_function, save_pull_args
 
@@ -909,7 +955,7 @@ class Authenticate(object):
         # set the credential saving variables
         cred_save_function, cred_save_args = self._define_save_pull_vars(
             'register_user', 'cred_save_args',
-            cred_save_function, cred_save_args, ['table_name'])
+            cred_save_function, cred_save_args)
         # this will return false for cred_save_function if there was an
         # error
         if not cred_save_function:
@@ -996,8 +1042,7 @@ class Authenticate(object):
         """
         password_pull_function, password_pull_args = self._define_save_pull_vars(
             'login', 'password_pull_args',
-            password_pull_function, password_pull_args,
-            ['table_name', 'username_col', 'password_col'])
+            password_pull_function, password_pull_args)
         st.write("password_pull_function", password_pull_function)
         st.write("password_pull_args", password_pull_args)
         # this will return false for all_locked_function if there was an
@@ -1007,9 +1052,7 @@ class Authenticate(object):
 
         all_locked_function, all_locked_args = self._define_save_pull_vars(
             'login', 'all_locked_args',
-            all_locked_function, all_locked_args,
-            ['table_name', 'username_col', 'locked_time_col',
-             'unlocked_time_col'])
+            all_locked_function, all_locked_args)
         st.write("all_locked_function", all_locked_function)
         st.write("all_locked_args", all_locked_args)
         if not all_locked_function:
@@ -1017,8 +1060,6 @@ class Authenticate(object):
         locked_info_function, locked_info_args = self._define_save_pull_vars(
             'login', 'locked_info_args',
             locked_info_function, locked_info_args,
-            ['table_name', 'username_col', 'locked_time_col',
-             'unlocked_time_col'],
             all_locked_function, all_locked_args)
         st.write("locked_info_function", locked_info_function)
         st.write("locked_info_args", locked_info_args)
@@ -1028,8 +1069,6 @@ class Authenticate(object):
             self._define_save_pull_vars(
                 'login', 'store_locked_time_args',
                 store_locked_time_function, store_locked_time_args,
-                ['table_name', 'username_col', 'locked_time_col',
-                'unlocked_time_col'],
                 all_locked_function, all_locked_args))
         st.write("store_locked_time_function", store_locked_time_function)
         st.write("store_locked_time_args", store_locked_time_args)
@@ -1039,8 +1078,6 @@ class Authenticate(object):
             self._define_save_pull_vars(
                 'login', 'store_unlocked_time_args',
                 store_unlocked_time_function, store_unlocked_time_args,
-                ['table_name', 'username_col', 'locked_time_col',
-                'unlocked_time_col'],
                 all_locked_function, all_locked_args))
         st.write("store_unlocked_time_function", store_unlocked_time_function)
         st.write("store_unlocked_time_args", store_unlocked_time_args)
@@ -1050,8 +1087,7 @@ class Authenticate(object):
         all_incorrect_attempts_function, all_incorrect_attempts_args = (
             self._define_save_pull_vars(
                 'login', 'all_incorrect_attempts_args',
-                all_incorrect_attempts_function, all_incorrect_attempts_args,
-                ['table_name', 'username_col', 'datetime_col']))
+                all_incorrect_attempts_function, all_incorrect_attempts_args))
         if not all_incorrect_attempts_function:
             return False, None
         store_incorrect_attempts_function, store_incorrect_attempts_args = (
@@ -1059,7 +1095,6 @@ class Authenticate(object):
             'login', 'store_incorrect_attempts_args',
                 store_incorrect_attempts_function,
                 store_incorrect_attempts_args,
-                ['table_name', 'username_col', 'datetime_col'],
                 all_incorrect_attempts_function, all_incorrect_attempts_args))
         if not store_incorrect_attempts_function:
             return False, None
@@ -1067,7 +1102,6 @@ class Authenticate(object):
             self._define_save_pull_vars(
             'login', 'pull_incorrect_attempts_args',
                 pull_incorrect_attempts_function, pull_incorrect_attempts_args,
-                ['table_name', 'username_col', 'datetime_col'],
                 all_incorrect_attempts_function, all_incorrect_attempts_args))
         if not pull_incorrect_attempts_function:
             return False, None
