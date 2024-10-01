@@ -87,21 +87,19 @@ def display_error(error_type: str, form: str,
         if error_type not in st.session_state.stauth['displayed_errors']:
             st.session_state.stauth['displayed_errors'][error_type] = {}
         st.session_state.stauth['displayed_errors'][error_type][form] = False
-        if 'stauth' in st.session_state:
-            if error_type in st.session_state.stauth:
-                if form in st.session_state.stauth[error_type]:
+        if error_type in st.session_state.stauth:
+            if form in st.session_state.stauth[error_type]:
+                st.error(f"{error_type}: "
+                         f"{st.session_state.stauth[error_type][form]}")
+                st.session_state.stauth['displayed_errors'][
+                    error_type][form] = True
+    else:
+        if error_type in st.session_state.stauth:
+            if form in st.session_state.stauth[error_type]:
+                if not st.session_state.stauth['displayed_errors'][
+                        error_type][form]:
                     st.error(f"{error_type}: "
                              f"{st.session_state.stauth[error_type][form]}")
                     st.session_state.stauth['displayed_errors'][
                         error_type][form] = True
-    else:
-        if 'stauth' in st.session_state:
-            if error_type in st.session_state.stauth:
-                if form in st.session_state.stauth[error_type]:
-                    if not st.session_state.stauth['displayed_errors'][
-                            error_type][form]:
-                        st.error(f"{error_type}: "
-                                 f"{st.session_state.stauth[error_type][form]}")
-                        st.session_state.stauth['displayed_errors'][
-                            error_type][form] = True
 

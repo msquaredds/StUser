@@ -269,15 +269,16 @@ class Authenticate(object):
                     self.save_pull_function_options):
             eh.add_dev_error(
                 'class_instantiation',
-                f"save_pull_function must be a string "
+                f"save_pull_function for class instantiation must be a string "
                 f"with any of the values in {self.save_pull_function_options}")
             return False
         if (self.save_pull_args is not None and
-                (self.save_pull_args_options[self.save_pull_function] !=
-                 list(self.save_pull_args.keys()))):
+                (set(self.save_pull_args_options[self.save_pull_function]) !=
+                 set(self.save_pull_args.keys()))):
             eh.add_dev_error(
                 'class_instantiation',
-                f"save_pull_args must be a dictionary with keys "
+                f"save_pull_args for class instantiation must be a dictionary "
+                f"with keys "
                 f"{self.save_pull_args_options[self.save_pull_function]}")
             return False
         return True
@@ -364,9 +365,16 @@ class Authenticate(object):
                 if key not in save_pull_args:
                     save_pull_args[key] = value
         elif secondary_args is not None:
-            save_pull_args = copy.deepcopy(secondary_args)
+            save_pull_args = secondary_args
 
         st.write("save_pull_args", save_pull_args)
+
+        if save_pull_function is None and save_pull_args is not None:
+            eh.add_dev_error(
+                form,
+                f"for form {form}, save_pull_function must be defined if "
+                f"save_pull_args {target_args_name} are defined")
+            return False, None
 
         # check the save_pull_args since this could be a confusing spot
         # as we are potentially defining args both in the class
@@ -384,12 +392,14 @@ class Authenticate(object):
 
             st.write("args_to_check", args_to_check)
 
-            if args_to_check != list(save_pull_args.keys()):
+            if set(args_to_check) != set(save_pull_args.keys()):
                 eh.add_dev_error(
                     form,
                     f"save_pull_args for the form {form} and "
                     f"target args {target_args_name} must include the "
-                    f"keys {args_to_check} and only those keys")
+                    f"keys {args_to_check} and only those keys "
+                    f"(either defined in the function or partially defined "
+                    f"at the class level and partially in the function)")
                 return False, None
 
         return save_pull_function, save_pull_args
