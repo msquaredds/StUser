@@ -1074,7 +1074,7 @@ class Authenticate(object):
             all_locked_function, all_locked_args)
         st.write("locked_info_function", locked_info_function)
         st.write("locked_info_args", locked_info_args)
-        if not locked_info_function:
+        if locked_info_function is not None and not locked_info_function:
             return False, None
         store_locked_time_function, store_locked_time_args = (
             self._define_save_pull_vars(
@@ -1083,7 +1083,8 @@ class Authenticate(object):
                 all_locked_function, all_locked_args))
         st.write("store_locked_time_function", store_locked_time_function)
         st.write("store_locked_time_args", store_locked_time_args)
-        if not store_locked_time_function:
+        if (store_locked_time_function is not None and
+                not store_locked_time_function):
             return False, None
         store_unlocked_time_function, store_unlocked_time_args = (
             self._define_save_pull_vars(
@@ -1092,7 +1093,8 @@ class Authenticate(object):
                 all_locked_function, all_locked_args))
         st.write("store_unlocked_time_function", store_unlocked_time_function)
         st.write("store_unlocked_time_args", store_unlocked_time_args)
-        if not store_unlocked_time_function:
+        if (store_unlocked_time_function is not None and
+                not store_unlocked_time_function):
             return False, None
 
         all_incorrect_attempts_function, all_incorrect_attempts_args = (
@@ -1108,14 +1110,16 @@ class Authenticate(object):
                 store_incorrect_attempts_function,
                 store_incorrect_attempts_args,
                 all_incorrect_attempts_function, all_incorrect_attempts_args))
-        if not store_incorrect_attempts_function:
+        if (store_incorrect_attempts_function is not None and
+                not store_incorrect_attempts_function):
             return False, None
         pull_incorrect_attempts_function, pull_incorrect_attempts_args = (
             self._define_save_pull_vars(
             'login', 'pull_incorrect_attempts_args',
                 pull_incorrect_attempts_function, pull_incorrect_attempts_args,
                 all_incorrect_attempts_function, all_incorrect_attempts_args))
-        if not pull_incorrect_attempts_function:
+        if (pull_incorrect_attempts_function is not None and
+                not pull_incorrect_attempts_function):
             return False, None
 
         return (True,
