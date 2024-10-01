@@ -1060,8 +1060,6 @@ class Authenticate(object):
         password_pull_function, password_pull_args = self._define_save_pull_vars(
             'login', 'password_pull_args',
             password_pull_function, password_pull_args)
-        st.write("password_pull_function", password_pull_function)
-        st.write("password_pull_args", password_pull_args)
         # this will return false for all_locked_function if there was an
         # error
         if not password_pull_function:
@@ -1070,16 +1068,12 @@ class Authenticate(object):
         all_locked_function, all_locked_args = self._define_save_pull_vars(
             'login', 'all_locked_args',
             all_locked_function, all_locked_args, check_args=False)
-        st.write("all_locked_function", all_locked_function)
-        st.write("all_locked_args", all_locked_args)
         if all_locked_function is not None and not all_locked_function:
             return False, None
         locked_info_function, locked_info_args = self._define_save_pull_vars(
             'login', 'locked_info_args',
             locked_info_function, locked_info_args,
             all_locked_function, all_locked_args)
-        st.write("locked_info_function", locked_info_function)
-        st.write("locked_info_args", locked_info_args)
         if locked_info_function is not None and not locked_info_function:
             return False, None
         store_locked_time_function, store_locked_time_args = (
@@ -1087,8 +1081,6 @@ class Authenticate(object):
                 'login', 'store_locked_time_args',
                 store_locked_time_function, store_locked_time_args,
                 all_locked_function, all_locked_args))
-        st.write("store_locked_time_function", store_locked_time_function)
-        st.write("store_locked_time_args", store_locked_time_args)
         if (store_locked_time_function is not None and
                 not store_locked_time_function):
             return False, None
@@ -1097,8 +1089,6 @@ class Authenticate(object):
                 'login', 'store_unlocked_time_args',
                 store_unlocked_time_function, store_unlocked_time_args,
                 all_locked_function, all_locked_args))
-        st.write("store_unlocked_time_function", store_unlocked_time_function)
-        st.write("store_unlocked_time_args", store_unlocked_time_args)
         if (store_unlocked_time_function is not None and
                 not store_unlocked_time_function):
             return False, None
@@ -2597,10 +2587,8 @@ class Authenticate(object):
                 pull_incorrect_attempts_function,
                 pull_incorrect_attempts_args))
         if not funcs_args_defined:
-            st.write("func_args not defined")
             return False
         else:
-            st.write("func_args are defined")
             (password_pull_function, password_pull_args,
              locked_info_function, locked_info_args,
              store_locked_time_function, store_locked_time_args,
