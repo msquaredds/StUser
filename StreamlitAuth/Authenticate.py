@@ -373,7 +373,7 @@ class Authenticate(object):
             eh.add_dev_error(
                 form,
                 f"for form {form}, save_pull_function must be defined if "
-                f"save_pull_args {target_args_name} are defined")
+                f"save_pull_args '{target_args_name}' are defined")
             return False, None
 
         # check the save_pull_args since this could be a confusing spot
@@ -392,7 +392,8 @@ class Authenticate(object):
 
             st.write("args_to_check", args_to_check)
 
-            if set(args_to_check) != set(save_pull_args.keys()):
+            if (save_pull_args is None or
+                    set(args_to_check) != set(save_pull_args.keys())):
                 eh.add_dev_error(
                     form,
                     f"save_pull_args for the form {form} and "
@@ -1065,7 +1066,7 @@ class Authenticate(object):
             all_locked_function, all_locked_args)
         st.write("all_locked_function", all_locked_function)
         st.write("all_locked_args", all_locked_args)
-        if not all_locked_function:
+        if all_locked_function is not None and not all_locked_function:
             return False, None
         locked_info_function, locked_info_args = self._define_save_pull_vars(
             'login', 'locked_info_args',
@@ -1098,7 +1099,8 @@ class Authenticate(object):
             self._define_save_pull_vars(
                 'login', 'all_incorrect_attempts_args',
                 all_incorrect_attempts_function, all_incorrect_attempts_args))
-        if not all_incorrect_attempts_function:
+        if (all_incorrect_attempts_function is not None and
+                not all_incorrect_attempts_function):
             return False, None
         store_incorrect_attempts_function, store_incorrect_attempts_args = (
             self._define_save_pull_vars(
