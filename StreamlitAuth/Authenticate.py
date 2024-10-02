@@ -360,10 +360,11 @@ class Authenticate(object):
         """
         if secondary_function is None:
             secondary_function = self.save_pull_function
-        if secondary_args is None and self.save_pull_args is not None:
-            secondary_args = self.save_pull_args.copy()
-        else:
-            secondary_args = None
+        if secondary_args is None:
+            if self.save_pull_args is not None:
+                secondary_args = self.save_pull_args.copy()
+            else:
+                secondary_args = None
 
         if save_pull_function is None and secondary_function is not None:
             save_pull_function = secondary_function
