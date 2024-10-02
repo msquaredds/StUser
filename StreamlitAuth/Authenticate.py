@@ -214,7 +214,9 @@ class Authenticate(object):
                 'store_incorrect_attempts_args':
                     ['table_name', 'username_col', 'datetime_col'],
                 'pull_incorrect_attempts_args':
-                    ['table_name', 'username_col', 'datetime_col']}}
+                    ['table_name', 'username_col', 'datetime_col'],
+                'username_pull_args':
+                    ['table_name', 'username_col', 'email_col']}}
 
         if not self._check_class_save_pull():
             raise ValueError()
@@ -358,11 +360,10 @@ class Authenticate(object):
         """
         if secondary_function is None:
             secondary_function = self.save_pull_function
-        if secondary_args is None:
-            if self.save_pull_args is not None:
-                secondary_args = self.save_pull_args.copy()
-            else:
-                secondary_args = None
+        if secondary_args is None and self.save_pull_args is not None:
+            secondary_args = self.save_pull_args.copy()
+        else:
+            secondary_args = None
 
         if save_pull_function is None and secondary_function is not None:
             save_pull_function = secondary_function
@@ -2850,6 +2851,10 @@ class Authenticate(object):
             username associated with the email. This can be a callable
             function or a string.
 
+            Only necessary if the save_pull_function was not defined
+            in the class instantiation. But if defined here, it will
+            override the class instantiation.
+
             At a minimum, a callable function should take 'email' as
             an argument, but can include other arguments as well.
             A callable function should return:
@@ -2870,6 +2875,9 @@ class Authenticate(object):
             since that will automatically be added here based on the
             user's input.
 
+            Only necessary if username_pull_function is defined when you
+            call this method.
+
             If using 'bigquery' as your username_pull_function, the
             following arguments are required:
 
@@ -2889,6 +2897,12 @@ class Authenticate(object):
             a callable function or a string. The function can also return
             an error message as a string, which will be handled by the
             error handler.
+
+            Only necessary if a) we want to email the user and b)
+            email_user was not defined in the class instantiation. If we
+            defined the email method in the class instantiation and we
+            provide another here, the one here will override the one in
+            the class instantiation.
 
             The current pre-defined function types are:
 
@@ -2952,6 +2966,19 @@ class Authenticate(object):
         """
         # check whether the inputs are within the correct set of options
         if not self._check_form_inputs(location, 'forgot_username'):
+            return False
+
+        # set the email variables
+        email_user, email_inputs, email_creds = self._define_email_vars(
+            email_user, email_inputs, email_creds)
+        # set the username pull variables
+        username_pull_function, username_pull_args = (
+            self._define_save_pull_vars(
+                'forgot_username', 'username_pull_args',
+                username_pull_function, username_pull_args))
+        # this will return false for username_pull_function if there was
+        # an error
+        if not username_pull_function:
             return False
 
         if location == 'main':
