@@ -216,7 +216,10 @@ class Authenticate(object):
                 'pull_incorrect_attempts_args':
                     ['table_name', 'username_col', 'datetime_col'],
                 'username_pull_args':
-                    ['table_name', 'username_col', 'email_col']}}
+                    ['table_name', 'username_col', 'email_col'],
+                'password_store_args':
+                    ['table_name', 'username_col', 'password_col',
+                     'datetime_col']}}
 
         if not self._check_class_save_pull():
             raise ValueError()
