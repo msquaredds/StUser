@@ -3357,6 +3357,28 @@ class Authenticate(object):
         if not self._check_form_inputs(location, 'forgot_password'):
             return False
 
+        # set the email variables
+        email_user, email_inputs, email_creds = self._define_email_vars(
+            email_user, email_inputs, email_creds)
+        # set the username pull variables
+        username_pull_function, username_pull_args = (
+            self._define_save_pull_vars(
+                'forgot_password', 'username_pull_args',
+                username_pull_function, username_pull_args))
+        # this will return false for username_pull_function if there was
+        # an error
+        if not username_pull_function:
+            return False
+        # set the password store variables
+        password_store_function, password_store_args = (
+            self._define_save_pull_vars(
+                'forgot_password', 'password_store_args',
+                password_store_function, password_store_args))
+        # this will return false for password_store_function if there was
+        # an error
+        if not password_store_function:
+            return False
+
         if location == 'main':
             forgot_password_form = st.form('Forgot Password')
         else:
