@@ -219,7 +219,11 @@ class Authenticate(object):
                     ['table_name', 'username_col', 'email_col'],
                 'password_store_args':
                     ['table_name', 'username_col', 'password_col',
-                     'datetime_col']}}
+                     'datetime_col'],
+                'info_pull_args':
+                    ['table_name', 'col_map'],
+                'info_store_args':
+                    ['table_name', 'col_map']}}
 
         if not self._check_class_save_pull():
             raise ValueError()
@@ -4074,6 +4078,28 @@ class Authenticate(object):
         # check whether the inputs are within the correct set of options
         if (not self._check_form_inputs(location, 'update_user_info') or
                 not self._check_store_new_info(store_new_info)):
+            return False
+
+        # set the email variables
+        email_user, email_inputs, email_creds = self._define_email_vars(
+            email_user, email_inputs, email_creds)
+        # set the info pull variables
+        info_pull_function, info_pull_args = (
+            self._define_save_pull_vars(
+                'update_user_info', 'info_pull_args',
+                info_pull_function, info_pull_args))
+        # this will return false for info_pull_function if there was
+        # an error
+        if not info_pull_function:
+            return False
+        # set the info store variables
+        info_store_function, info_store_args = (
+            self._define_save_pull_vars(
+                'update_user_info', 'info_store_args',
+                info_store_function, info_store_args))
+        # this will return false for info_store_function if there was
+        # an error
+        if not info_store_function:
             return False
 
         # we need a key for the info so they can be accessed in
