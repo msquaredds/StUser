@@ -383,8 +383,6 @@ class Authenticate(object):
         elif secondary_args is not None:
             save_pull_args = secondary_args
 
-        st.write("save_pull_args", save_pull_args)
-
         if save_pull_function is None and save_pull_args is not None:
             eh.add_dev_error(
                 form,
@@ -404,8 +402,6 @@ class Authenticate(object):
             if save_pull_function in self.save_pull_args_function_specific:
                 args_to_check.extend(self.save_pull_args_function_specific[
                     save_pull_function][target_args_name])
-
-            st.write("args_to_check", args_to_check)
 
             if (save_pull_args is None or
                     set(args_to_check) != set(save_pull_args.keys())):
