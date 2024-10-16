@@ -48,3 +48,6 @@ classifiers = [
 
 [tool.setuptools]
 packages = ["StreamlitAuth"]
+
+[tool.setuptools.dynamic]
+readme = {file = "README.md"}
