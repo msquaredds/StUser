@@ -533,3 +533,52 @@ class BQTools(object):
         query_result = self._run_query(client, sql_statement)
         if isinstance(query_result, tuple):
             return query_result[1]
+
+    def store_preauthorization_codes(
+            self,
+            emails_codes: dict,
+            bq_creds: dict,
+            project: str,
+            dataset: str,
+            table_name: str,
+            if_exists: str = 'append') -> Union[None, str]:
+        """
+        Stores user credentials to Google BigQuery.
+
+        :param emails_codes: The emails and codes to store. The emails
+            and codes should be in lists of the same length with each
+            position in the list corresponding to the same user.
+            {'emails': [emails], 'codes': [codes]}.
+        :param bq_creds: The credentials to access the BigQuery project.
+            These should, at a minimum, have the roles of "BigQuery Data
+            Editor", "BigQuery Read Session User" and "BigQuery Job User".
+        :param project: The project to store the data in.
+        :param dataset: The dataset to store the data in.
+        :param table_name: The name of the table to store the data in.
+        :param if_exists: What to do if the table already exists.
+            Can be 'append', 'replace', or 'fail'. Default is 'append'.
+        :return: None if successful, error message if not.
+        """
+        df = pd.DataFrame(emails_codes)
+
+        # connect to the database
+        client = self._setup_connection(bq_creds)
+        if isinstance(client, str):
+            # in this case the "client" is an error message
+            return client
+
+        # set up table_id
+        table_id = project + "." + dataset + "." + table_name
+
+        # set up job_config
+        job_config = self._setup_job_config(if_exists)
+
+        # store
+        job_result = self._store_df(client, df, table_id, job_config)
+        if isinstance(job_result, str):
+            return job_result
+
+        # test if we can access the table / double check that it saved
+        stored_result = self._test_data_stored(client, table_id)
+        if isinstance(stored_result, str):
+            return stored_result

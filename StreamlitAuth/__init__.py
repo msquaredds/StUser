@@ -5,3 +5,4 @@ from StreamlitAuth.Email import Email
 from StreamlitAuth.Encryptor import GenericEncryptor, GoogleEncryptor
 from StreamlitAuth.Hasher import Hasher
 from StreamlitAuth.Validator import Validator
+from StreamlitAuth.Verification import Verification

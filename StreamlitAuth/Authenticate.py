@@ -3021,14 +3021,6 @@ class Authenticate(object):
             return False
         return True
 
-    def _generate_random_password(self) -> str:
-        """Generate a random password."""
-        password = ''
-        validator = Validator()
-        while not validator.validate_password(password, self.weak_passwords):
-            password = secrets.token_urlsafe()
-        return password
-
     def _add_inputs_password_update(
             self, password_store_args: dict, username: str,
             password: str) -> dict:
@@ -3144,7 +3136,9 @@ class Authenticate(object):
                 username_pull_args)
             # username will only be non-False if the username was pulled
             if pulled_username and pulled_username == username:
-                password = self._generate_random_password()
+                validator = Validator()
+                password = validator.generate_random_password(
+                    self.weak_passwords)
                 # hash password for storage
                 hashed_password = Hasher([password]).generate()[0]
 
@@ -3263,13 +3257,13 @@ class Authenticate(object):
             a database or other storage location. This can be useful so
             that you can confirm the password is saved during the
             callback and handle that as necessary.
-        :param password_store_args: Arguments for the cred_save_function.
-            This should not include 'username' or 'password' as
-            those will automatically be added here based on the user's
-            input. Instead, it should include things like database
-            name, table name, credentials to log into the database,
-            etc. That way they can be compiled in this function and passed
-            to the function in the callback.
+        :param password_store_args: Arguments for the
+            password_store_function. This should not include 'username' or
+            'password' as those will automatically be added here based on
+            the user's input. Instead, it should include things like
+            database name, table name, credentials to log into the
+            database, etc. That way they can be compiled in this function
+            and passed to the function in the callback.
 
             If using 'bigquery' as your password_store_function, the
             following arguments are required:

@@ -1,4 +1,5 @@
 import re
+import secrets
 
 
 class Validator(object):
@@ -77,3 +78,10 @@ class Validator(object):
             return False
         else:
             return True
+
+    def generate_random_password(self, weak_passwords: list = []) -> str:
+        """Generate a random password."""
+        password = ''
+        while not self.validate_password(password, weak_passwords):
+            password = secrets.token_urlsafe()
+        return password
