@@ -2,6 +2,7 @@ import streamlit as st
 
 from typing import Callable, Union
 
+from StreamlitAuth.BQTools import BQTools
 from StreamlitAuth.Email import Email
 from StreamlitAuth.Validator import Validator
 
@@ -72,7 +73,7 @@ class Verification(object):
             self,
             auth_codes: dict,
             email_inputs: dict,
-            email_user: Union[callable, str],
+            email_user: Union[Callable, str],
             email_creds: dict = None) -> None:
         """
         Send an email to the user with their authorization code.
