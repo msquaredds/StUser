@@ -247,8 +247,8 @@ class Verification(object):
         if isinstance(email, str):
             email = [email]
         auth_codes = {}
+        validator = Validator()
         for e in email:
-            validator = Validator()
             auth_codes[e] = validator.generate_random_password()
         st.session_state.stauth['auth_codes'] = auth_codes
 
