@@ -1,6 +1,6 @@
 import streamlit as st
 
-from typing import Union
+from typing import Callable, Union
 
 from StreamlitAuth.Email import Email
 from StreamlitAuth.Validator import Validator
