@@ -586,7 +586,7 @@ class Authenticate(object):
         elif message_type == 'forgot_password':
             message_body = \
                 (f"""You requested a password reset for {website_name}.\n\n
-                 Your new password is: {password}.\n\n
+                 Your new password is: {password} .\n\n
                  If you did not request a password reset or you have any
                  questions, please contact us at {website_email}.""")
         elif message_type == 'update_user_info':

@@ -4,6 +4,7 @@ from typing import Callable, Union
 
 from StreamlitAuth.BQTools import BQTools
 from StreamlitAuth.Email import Email
+from StreamlitAuth.Hasher import Hasher
 from StreamlitAuth.Validator import Validator
 
 
@@ -107,7 +108,7 @@ class Verification(object):
         """
         subject = f"{email_inputs['website_name']}: Preauthorization Code"
         for email, code in auth_codes.items():
-            body = (f"Your authorization code is: {code} \n\n"
+            body = (f"Your authorization code is: {code} .\n\n"
                     f"If you did not request this code or your code is not "
                     f"working as expected, please contact us immediately at "
                     f"{email_inputs['website_email']}.")
@@ -254,8 +255,13 @@ class Verification(object):
         st.session_state.stauth['auth_codes'] = auth_codes
 
         if code_store_function is not None:
+            # we pass the hashed authorization codes for storage so they
+            # are more secure
+            hashed_auth_codes = {
+                email: Hasher([password]).generate()[0]
+                for email, password in auth_codes.items()}
             self._update_auth_codes(
-                code_store_function, code_store_args, auth_codes)
+                code_store_function, code_store_args, hashed_auth_codes)
             if email_user is not None:
                 self._send_user_email(
                     auth_codes, email_inputs, email_user, email_creds)
