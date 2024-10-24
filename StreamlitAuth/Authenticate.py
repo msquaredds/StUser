@@ -416,6 +416,137 @@ class Authenticate(object):
 
         return save_pull_function, save_pull_args
 
+    def _define_register_user_functions_args(
+            self,
+            auth_code_pull_function: Union[str, Callable],
+            auth_code_pull_args: dict,
+            all_locked_function: str,
+            all_locked_args: dict,
+            locked_info_function: Union[str, Callable],
+            locked_info_args: dict,
+            store_locked_time_function: Union[str, Callable],
+            store_locked_time_args: dict,
+            all_incorrect_attempts_function: str,
+            all_incorrect_attempts_args: dict,
+            store_incorrect_attempts_function: Union[str, Callable],
+            store_incorrect_attempts_args: dict,
+            pull_incorrect_attempts_function: Union[str, Callable],
+            pull_incorrect_attempts_args: dict
+    ) -> Tuple[bool, Union[tuple, None]]:
+        """
+        Define the functions and arguments that are needed for the
+            register user method with preauthorization. Uses a hierarchy
+            method, where the highest level allows you to define the
+            least, but if you define a lower level that will override any
+            higher levels.
+
+        Hierarchy:
+        1. Class definition (self.save_pull_function, self.save_pull_args)
+            a. General method definition (all_locked_function,
+                                          all_locked_args)
+                i. Specific method def. (locked_info_function,
+                                         locked_info_args)
+                ii. Specific method def. (store_locked_time_function,
+                                          store_locked_time_args)
+            b. General method definition (all_incorrect_attempts_function,
+                                          all_incorrect_attempts_args)
+                i. Specific method def. (store_incorrect_attempts_function,
+                                         store_incorrect_attempts_args)
+                ii. Specific method def. (pull_incorrect_attempts_function,
+                                          pull_incorrect_attempts_args)
+            c. General/specific method def. (auth_code_pull_function,
+                                             auth_code_pull_args)
+        """
+        auth_code_pull_function, auth_code_pull_args = (
+            self._define_save_pull_vars(
+                'register_user', 'auth_code_pull_args',
+                auth_code_pull_function, auth_code_pull_args))
+        # this will return false for auth_code_pull_function if there was
+        # an error
+        if not auth_code_pull_function:
+            return False, None
+
+        all_locked_function, all_locked_args = self._define_save_pull_vars(
+            'register_user', 'all_locked_args',
+            all_locked_function, all_locked_args, check_args=False)
+        if all_locked_function is not None and not all_locked_function:
+            return False, None
+        locked_info_function, locked_info_args = self._define_save_pull_vars(
+            'register_user', 'locked_info_args',
+            locked_info_function, locked_info_args,
+            all_locked_function, all_locked_args)
+        if locked_info_function is not None and not locked_info_function:
+            return False, None
+        store_locked_time_function, store_locked_time_args = (
+            self._define_save_pull_vars(
+                'register_user', 'store_locked_time_args',
+                store_locked_time_function, store_locked_time_args,
+                all_locked_function, all_locked_args))
+        if (store_locked_time_function is not None and
+                not store_locked_time_function):
+            return False, None
+
+        all_incorrect_attempts_function, all_incorrect_attempts_args = (
+            self._define_save_pull_vars(
+                'register_user', 'all_incorrect_attempts_args',
+                all_incorrect_attempts_function, all_incorrect_attempts_args,
+                check_args=False))
+        if (all_incorrect_attempts_function is not None and
+                not all_incorrect_attempts_function):
+            return False, None
+        store_incorrect_attempts_function, store_incorrect_attempts_args = (
+            self._define_save_pull_vars(
+            'register_user', 'store_incorrect_attempts_args',
+                store_incorrect_attempts_function,
+                store_incorrect_attempts_args,
+                all_incorrect_attempts_function, all_incorrect_attempts_args))
+        if (store_incorrect_attempts_function is not None and
+                not store_incorrect_attempts_function):
+            return False, None
+        pull_incorrect_attempts_function, pull_incorrect_attempts_args = (
+            self._define_save_pull_vars(
+            'register_user', 'pull_incorrect_attempts_args',
+                pull_incorrect_attempts_function, pull_incorrect_attempts_args,
+                all_incorrect_attempts_function, all_incorrect_attempts_args))
+        if (pull_incorrect_attempts_function is not None and
+                not pull_incorrect_attempts_function):
+            return False, None
+
+        return (True,
+                (auth_code_pull_function, auth_code_pull_args,
+                 locked_info_function, locked_info_args,
+                 store_locked_time_function, store_locked_time_args,
+                 store_incorrect_attempts_function,
+                 store_incorrect_attempts_args,
+                 pull_incorrect_attempts_function,
+                 pull_incorrect_attempts_args))
+
+    def _check_register_user_storage_functions(
+            self,
+            locked_info_function: Union[str, Callable],
+            store_locked_time_function: Union[str, Callable],
+            store_incorrect_attempts_function: Union[str, Callable],
+            pull_incorrect_attempts_function: Union[str, Callable]) -> bool:
+        """
+        Check whether the optional storage functions are all None or all
+        not None. Either of those is fine, we just can't have some as None
+        and others as not None.
+        """
+        if (locked_info_function is None and
+            store_locked_time_function is None and
+            store_incorrect_attempts_function is None and
+            pull_incorrect_attempts_function is None) or \
+                (locked_info_function is not None and
+                 store_locked_time_function is not None and
+                 store_incorrect_attempts_function is not None and
+                 pull_incorrect_attempts_function is not None):
+            return True
+        eh.add_dev_error(
+            'register_user',
+            "If any of the preauthorization storage functions are used, "
+            "they must all be used.")
+        return False
+
     def _check_register_user_info(
             self, new_email: str, new_username: str, new_password: str,
             new_password_repeat: str, preauthorization: bool) -> bool:
@@ -721,12 +852,26 @@ class Authenticate(object):
             username_text_key: str,
             password_text_key: str,
             repeat_password_text_key: str,
+            auth_code_key: str,
             preauthorization: bool,
             email_user: Union[callable, str] = None,
             email_inputs: dict = None,
             email_creds: dict = None,
             cred_save_function: Union[Callable, str] = None,
-            cred_save_args: dict = None) -> None:
+            cred_save_args: dict = None,
+            auth_code_pull_function: Union[str, Callable] = 'bigquery',
+            auth_code_pull_args: dict = None,
+            incorrect_attempts: int = 10,
+            locked_hours: int = 24,
+            locked_info_function: Union[str, Callable] = None,
+            locked_info_args: dict = None,
+            store_locked_time_function: Union[str, Callable] = None,
+            store_locked_time_args: dict = None,
+            store_incorrect_attempts_function: Union[
+                str, Callable] = None,
+            store_incorrect_attempts_args: dict = None,
+            pull_incorrect_attempts_function: Union[str, Callable] = None,
+            pull_incorrect_attempts_args: dict = None) -> None:
         """
         Once a new user submits their info, this is a callback to check
         the validity of their input and register them if valid.
@@ -739,6 +884,8 @@ class Authenticate(object):
             user's password.
         :param repeat_password_text_key: The session state name to access
             the new user's repeated password.
+        :param auth_code_key: The session state name to access the new
+            user's authentication code if preauthorization is required.
         :param preauthorization: The preauthorization requirement.
             True: user must be preauthorized to register.
             False: any user can register.
@@ -771,6 +918,59 @@ class Authenticate(object):
             cred_save_function. Only necessary if cred_save_function is
             not none. See the docstring for register_user for more
             information.
+        :param auth_code_pull_function: The function to pull the
+            authorization code associated with the email. This can be a
+            callable function or a string. See the docstring for
+            register_user for more information.
+        :param auth_code_pull_args: Arguments for the
+            auth_code_pull_function. See the docstring for register_user
+            for more information.
+        :param incorrect_attempts: The number of incorrect attempts
+            allowed before the account is locked.
+        :param locked_hours: The number of hours the account is locked
+            after exceeding the number of incorrect attempts.
+
+        The following parameters are all associated with preauthorization
+        and the pattern of storing incorrect registration attempts to a
+        database, as well as storing the times of an email being locked.
+        If too many incorrect attempts occur at registration, the account
+        is locked for locked_hours.
+        Unlike with login, we don't have an unlock time, since that just
+        means the user was able to register, which should only happen
+        once.
+        This database pattern isn't required, but is HIGHLY RECOMMENDED.
+        If not used, the session_state will still record incorrect
+        registration attempts and if an account is locked, but that
+        can easily be disregarded by refreshing the website.
+        Only necessary if preauthorization is True.
+
+        :param locked_info_function: The function to pull the locked
+            information associated with the email. This can be a
+            callable function or a string. See the docstring for
+            register_user for more information.
+        :param locked_info_args: Arguments for the locked_info_function.
+            See the docstring for register_user for more information.
+        :param store_locked_time_function: The function to store the
+            locked times associated with the email. This can be a
+            callable function or a string. See the docstring for
+            register_user for more information.
+        :param store_locked_time_args: Arguments for the
+            store_locked_times_function. See the docstring for
+            register_user for more information.
+        :param store_incorrect_attempts_function: The function to store
+            the incorrect attempts associated with the email. This can
+            be a callable function or a string. See the docstring for
+            register_user for more information.
+        :param store_incorrect_attempts_args: Arguments for the
+            store_incorrect_attempts_function. See the docstring for
+            register_user for more information.
+        :param pull_incorrect_attempts_function: The function to pull the
+            incorrect attempts associated with the email. This can be a
+            callable function or a string. See the docstring for
+            register_user for more information.
+        :param pull_incorrect_attempts_args: Arguments for the
+            pull_incorrect_attempts_function. See the docstring for
+            register_user for more information.
         """
         new_email = st.session_state[email_text_key]
         new_username = st.session_state[username_text_key]
@@ -802,19 +1002,38 @@ class Authenticate(object):
                 # registered
                 eh.clear_errors()
 
-    def register_user(self,
-                      location: str = 'main',
-                      preauthorization: bool = False,
-                      email_text_key: str = 'register_user_email',
-                      username_text_key: str = 'register_user_username',
-                      password_text_key: str = 'register_user_password',
-                      repeat_password_text_key: str =
-                          'register_user_repeat_password',
-                      email_user: Union[Callable, str] = None,
-                      email_inputs: dict = None,
-                      email_creds: dict = None,
-                      cred_save_function: Union[Callable, str] = None,
-                      cred_save_args: dict = None) -> None:
+    def register_user(
+            self,
+            location: str = 'main',
+            preauthorization: bool = False,
+            email_text_key: str = 'register_user_email',
+            username_text_key: str = 'register_user_username',
+            password_text_key: str = 'register_user_password',
+            repeat_password_text_key: str =
+              'register_user_repeat_password',
+            auth_code_key: str = 'register_user_auth_code',
+            email_user: Union[Callable, str] = None,
+            email_inputs: dict = None,
+            email_creds: dict = None,
+            cred_save_function: Union[Callable, str] = None,
+            cred_save_args: dict = None,
+            auth_code_pull_function: Union[str, Callable] = 'bigquery',
+            auth_code_pull_args: dict = None,
+            incorrect_attempts: int = 10,
+            locked_hours: int = 24,
+            all_locked_function: str = None,
+            all_locked_args: dict = None,
+            locked_info_function: Union[str, Callable] = None,
+            locked_info_args: dict = None,
+            store_locked_time_function: Union[str, Callable] = None,
+            store_locked_time_args: dict = None,
+            all_incorrect_attempts_function: str = None,
+            all_incorrect_attempts_args: dict = None,
+            store_incorrect_attempts_function: Union[
+                str, Callable] = None,
+            store_incorrect_attempts_args: dict = None,
+            pull_incorrect_attempts_function: Union[str, Callable] = None,
+            pull_incorrect_attempts_args: dict = None) -> None:
         """
         Creates a new user registration widget.
 
@@ -838,6 +1057,10 @@ class Authenticate(object):
         :param repeat_password_text_key: The key for the repeat password
             text input on the registration form. We attempt to default to
             a unique key, but you can put your own in here if you want to
+            customize it or have clashes with other keys/forms.
+        :param auth_code_key: The key for the authorization code text
+            input on the registration form. We attempt to default to a
+            unique key, but you can put your own in here if you want to
             customize it or have clashes with other keys/forms.
         :param email_user: If we want to email the user after registering,
             provide the method for email here, this can be a callable
@@ -964,6 +1187,394 @@ class Authenticate(object):
             Note that bq_creds, project and dataset could be defined in
             the class instantiation, although they can be overwritten
             here. table_name must be defined here.
+        :param auth_code_pull_function: The function to pull the
+            authorization code associated with the email. This can be a
+            callable function or a string.
+
+            Only necessary if preauthorization is True.
+
+            Only necessary to define here if the save_pull_function was
+            not defined in the class instantiation. But if defined here,
+            it will override the class instantiation.
+
+            At a minimum, a callable function should take 'email' as
+            an argument, but can include other arguments as well.
+            A callable function should return:
+             - A tuple of an indicator and a value
+             - The indicator should be either 'dev_error', 'user_error'
+                or 'success'.
+             - The value should be a string that contains the error
+                message when the indicator is 'dev_error', None when the
+                indicator is 'user_error', and the hashed password when
+                the indicator is 'success'. It is None with 'user_error'
+                since we will handle that in the calling function and
+                create a user_errors that tells the user that the
+                email or authorization code was incorrect.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls the code from a BigQuery table. It
+                    performs a basic SQL lookup to see if there are any
+                    codes associated with the given email and, if
+                    so, returns that (hashed) code.
+        :param auth_code_pull_args: Arguments for the
+            auth_code_pull_function.
+
+            Only necessary if auth_code_pull_function is defined when you
+            call this method.
+
+            If using 'bigquery' as your auth_code_pull_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails.
+            auth_code_col (str): The name of the column in the BigQuery
+                table that contains the authorization codes.
+
+            Note that bq_creds, project and dataset could be defined in
+            the class instantiation, although they can be overwritten
+            here. table_name, email_col and auth_code_col must be
+            defined here.
+        :param incorrect_attempts: The number of incorrect attempts
+            allowed before the account is locked. Only necessary if
+            preauthorization is True.
+        :param locked_hours: The number of hours the account is locked
+            after exceeding the number of incorrect attempts. Only
+            necessary if preauthorization is True.
+
+        The following parameters are all associated with preauthorization
+        and the pattern of storing incorrect registration attempts to a
+        database, as well as storing the times of an email being locked.
+        If too many incorrect attempts occur at registration, the account
+        is locked for locked_hours.
+        Unlike with login, we don't have an unlock time, since that just
+        means the user was able to register, which should only happen
+        once.
+        This database pattern isn't required, but is HIGHLY RECOMMENDED.
+        If not used, the session_state will still record incorrect
+        registration attempts and if an account is locked, but that
+        can easily be disregarded by refreshing the website.
+        Only necessary if preauthorization is True.
+
+        :param all_locked_function: Since all the lock-type functions
+            below behave similarly, you can define all of them at once
+            here if the input is a string. For example, you could say
+            all_locked_function='bigquery'. However, since each function
+            behaves somewhat differently at the detailed level, you cannot
+            supply a function here.
+
+            This replaces the need to define locked_info_function and
+            store_locked_time_function.
+
+            Only necessary if the save_pull_function was not defined
+            in the class instantiation. But if defined here, it will
+            override the class instantiation.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls and stores the locked datetimes from a
+                BigQuery table.
+        :param all_locked_args: If all_locked_function is defined, you
+            can supply the arguments for the type of function here. For
+            example, if using 'bigquery', you would supply:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails.
+            locked_time_col (str): The name of the column in the BigQuery
+                table that contains the locked_times.
+
+            Only necessary if all_locked_function is defined when you
+            call this method.
+
+            Note that bq_creds, project and dataset could be defined in
+            the class instantiation, although they can be overwritten
+            here. table_name, email_col and locked_time_col must be
+            defined here.
+        :param locked_info_function: The function to pull the locked
+            information associated with the email. This can be a
+            callable function or a string.
+
+            Only necessary if both a) the save_pull_function was not
+            defined in the class instantiation and b) all_locked_function
+            was not defind in this method. But if defined here, it will
+            override either of those.
+
+            The function should pull in locked_info_args, which can be
+            used for things like accessing and pulling from a database.
+            At a minimum, a callable function should take 'email' as
+            one of the locked_info_args, but can include other arguments
+            as well.
+            A callable function should return:
+            - A tuple of an indicator and a value
+            - The indicator should be either 'dev_error' or 'success'.
+            - The value should be a string that contains the error
+                message when the indicator is 'dev_error' and
+                latest_lock_datetime when the indicator is 'success'.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls the locked datetimes from a BigQuery
+                    table.
+                    This pre-defined version will look for a table with
+                    two columns corresponding to email and locked_time
+                    (see locked_info_args below for how to define there).
+                    Note that if using 'bigquery' here, in our other
+                    database functions, you should also be using the
+                    'bigquery' option or using your own method that writes
+                    to a table set up in the same way.
+        :param locked_info_args: Arguments for the locked_info_function.
+            This should not include 'email' since that will
+            automatically be added here. Instead, it should include things
+            like database name, table name, credentials to log into the
+            database, etc.
+
+            Only necessary if locked_info_function is defined when you
+            call this method.
+
+            If using 'bigquery' as your locked_info_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails.
+            locked_time_col (str): The name of the column in the BigQuery
+                table that contains the locked_times.
+
+            Note that bq_creds, project and dataset could be defined in
+            the class instantiation, although they can be overwritten
+            here. table_name, email_col and locked_time_col must be
+            defined here.
+        :param store_locked_time_function: The function to store the
+            locked datetime associated with the email. This can be a
+            callable function or a string.
+
+            Only necessary if both a) the save_pull_function was not
+            defined in the class instantiation and b) all_locked_function
+            was not defind in this method. But if defined here, it will
+            override either of those.
+
+            The function should pull in store_locked_time_args, which can
+            be used for things like accessing and storing to a database.
+            At a minimum, a callable function should take 'email' as
+            one of the locked_info_args, but can include other arguments
+            as well. A callable function can return an error message
+            as a string, which our error handler will handle.
+
+            The current pre-defined function types are:
+                'bigquery': Stores the locked datetime to a BigQuery
+                    table. This pre-defined version will look for a table
+                    with two columns corresponding to username and
+                    locked_time (see store_locked_time_args below for how
+                    to define there). Note that if using 'bigquery' here,
+                    in our other database functions, you should also be
+                    using the 'bigquery' option or using your own method
+                    that pulls from a table set up in the same way.
+        :param store_locked_time_args: Arguments for the
+            store_locked_time_function. This should not include 'email'
+            since that will automatically be added here. Instead, it
+            should include things like database name, table name,
+            credentials to log into the database, etc.
+
+            Only necessary if store_locked_time_function is defined when
+            you call this method.
+
+            If using 'bigquery' as your store_locked_time_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails.
+            locked_time_col (str): The name of the column in the BigQuery
+                table that contains the locked_times.
+
+            Note that bq_creds, project and dataset could be defined in
+            the class instantiation, although they can be overwritten
+            here. table_name, email_col and locked_time_col must be
+            defined here.
+        :param all_incorrect_attempts_function: Since all the
+            incorrect attempts-type functions below behave similarly,
+            you can define all of them at once here if the input is a
+            string. For example, you could say
+            all_incorrect_attempts_function='bigquery'. However, since
+            each function behaves somewhat differently at the detailed
+            level, you cannot supply a function here.
+
+            This replaces the need to define
+            store_incorrect_attempts_function and
+            pull_incorrect_attempts_function.
+
+            Only necessary if the save_pull_function was not defined
+            in the class instantiation. But if defined here, it will
+            override the class instantiation.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls and stores the incorrect attempts from a
+                    BigQuery table.
+        :param all_incorrect_attempts_args: If
+            all_incorrect_attempts_function is defined, you can supply the
+            arguments for the type of function here. For example, if using
+            'bigquery', you would supply:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails.
+            datetime_col (str): The name of the column in the BigQuery
+                table that contains the datetime.
+
+            Note that bq_creds, project and dataset could be defined in
+            the class instantiation, although they can be overwritten
+            here. table_name, email_col and datetime_col must be
+            defined here.
+        :param store_incorrect_attempts_function: The function to store
+            the datetime and username when an incorrect login attempt
+            occurs. This can be a callable function or a string. At a
+            minimum, a callable function should take 'email' as an
+            argument, but can include other arguments as well. The
+            function should pull in store_incorrect_attempts_args, which
+            can be used for things like accessing and storing to a
+            database. A callable function can return an error message as a
+            string, which our error handler will handle.
+
+            Only necessary if both a) the save_pull_function was not
+            defined in the class instantiation and b)
+            all_incorrect_attempts_function was not defind in this method.
+            But if defined here, it will override either of those.
+
+            The current pre-defined function types are:
+                'bigquery': Stores the attempted datetime to a BigQuery
+                    table. This pre-defined version will look for a table
+                    with two columns corresponding to email and
+                    datetime (see store_incorrect_attempts_args below for
+                    how to define there).
+                    Note that if using 'bigquery' here, in our other
+                    database functions, you should also be using the
+                    'bigquery' option or using your own method that pulls
+                    from a table set up in the same way.
+        :param store_incorrect_attempts_args: Arguments for the
+            store_incorrect_attempts_function. This should not include
+            'email' since that will automatically be added here.
+            Instead, it should include things like database name, table
+            name, credentials to log into the database, etc.
+
+            Only necessary if store_incorrect_attempts_function is defined
+            when you call this method.
+
+            If using 'bigquery' as your store_incorrect_attempts_function,
+            the following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails.
+            datetime_col (str): The name of the column in the BigQuery
+                table that contains the datetime.
+
+            Note that bq_creds, project and dataset could be defined in
+            the class instantiation, although they can be overwritten
+            here. table_name, email_col and datetime_col must be
+            defined here.
+        :param pull_incorrect_attempts_function: The function to pull the
+            datetimes associated with a username for incorrect login
+            attempts. This can be a callable function or a string.
+
+            Only necessary if both a) the save_pull_function was not
+            defined in the class instantiation and b)
+            all_incorrect_attempts_function was not defind in this method.
+            But if defined here, it will override either of those.
+
+            The function should pull in pull_incorrect_attempts_args,
+            which can be used for things like accessing and pulling from a
+            database. At a minimum, a callable function should take
+            'email' as one of the pull_incorrect_attempts_args, but can
+            include other arguments as well.
+            A callable function should return:
+            - A tuple of an indicator and a value
+            - The indicator should be either 'dev_error' or 'success'.
+            - The value should be a string that contains the error
+                message when the indicator is 'dev_error' and a
+                pandas series of datetimes (if data exists) or None (if
+                data does not exist) when the indicator is 'success'.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls the incorrect login datetimes from a
+                    BigQuery table.
+                    This pre-defined version will look for a table
+                    with two columns corresponding to email and
+                    datetime (see pull_incorrect_attempts_args below for
+                    how to define there).
+                    Note that if using 'bigquery' here, in our other
+                    database functions, you should also be using the
+                    'bigquery' option or using your own method that pulls
+                    from a table set up in the same way.
+        :param pull_incorrect_attempts_args: Arguments for the
+            pull_incorrect_attempts_function. This should not include
+            'email' since that will automatically be added here.
+            Instead, it should include things like database name, table
+            name, credentials to log into the database, etc.
+
+            Only necessary if pull_incorrect_attempts_function is defined
+            when you call this method.
+
+            If using 'bigquery' as your pull_incorrect_attempts_function,
+            the following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails.
+            datetime_col (str): The name of the column in the BigQuery
+                table that contains the datetime.
+
+            Note that bq_creds, project and dataset could be defined in
+            the class instantiation, although they can be overwritten
+            here. table_name, email_col and datetime_col must be
+            defined here.
         """
         # check on whether all session state inputs exist and are the
         # correct type and whether the inputs are within the correct set
@@ -983,6 +1594,36 @@ class Authenticate(object):
         if not cred_save_function:
             return False
 
+        if preauthorization:
+            # choose the correct save & pull functions & arguments, as
+            # well as the correct incorrect attempts functions and args
+            funcs_args_defined, funcs_and_args = (
+                self._define_register_user_functions_args(
+                    auth_code_pull_function, auth_code_pull_args,
+                    all_locked_function, all_locked_args,
+                    locked_info_function, locked_info_args,
+                    store_locked_time_function, store_locked_time_args,
+                    all_incorrect_attempts_function, all_incorrect_attempts_args,
+                    store_incorrect_attempts_function,
+                    store_incorrect_attempts_args,
+                    pull_incorrect_attempts_function,
+                    pull_incorrect_attempts_args))
+            if not funcs_args_defined:
+                return False
+            else:
+                (auth_code_pull_function, auth_code_pull_args,
+                 locked_info_function, locked_info_args,
+                 store_locked_time_function, store_locked_time_args,
+                 store_incorrect_attempts_function,
+                 store_incorrect_attempts_args,
+                 pull_incorrect_attempts_function,
+                 pull_incorrect_attempts_args) = funcs_and_args
+            if not self._check_register_user_storage_functions(
+                    locked_info_function, store_locked_time_function,
+                    store_incorrect_attempts_function,
+                    pull_incorrect_attempts_function):
+                return False
+
         if location == 'main':
             register_user_form = st.form('Register user')
         elif location == 'sidebar':
@@ -1001,13 +1642,25 @@ class Authenticate(object):
         new_password_repeat = register_user_form.text_input(
             'Repeat password', type='password',
             key=repeat_password_text_key)
+        if preauthorization:
+            auth_code = register_user_form.text_input(
+                'Authorization code', type='password',
+                key=auth_code_key)
 
         register_user_form.form_submit_button(
             'Register', on_click=self._check_and_register_user,
             args=(email_text_key, username_text_key, password_text_key,
-                  repeat_password_text_key, preauthorization, email_user,
-                  email_inputs, email_creds, cred_save_function,
-                  cred_save_args))
+                  repeat_password_text_key, auth_code_key, preauthorization,
+                  email_user, email_inputs, email_creds,
+                  cred_save_function, cred_save_args,
+                  auth_code_pull_function, auth_code_pull_args,
+                  incorrect_attempts, locked_hours,
+                  locked_info_function, locked_info_args,
+                  store_locked_time_function, store_locked_time_args,
+                  store_incorrect_attempts_function,
+                  store_incorrect_attempts_args,
+                  pull_incorrect_attempts_function,
+                  pull_incorrect_attempts_args))
 
     def check_authentication_status(self) -> bool:
         """Check if the user is authenticated."""
@@ -1134,7 +1787,7 @@ class Authenticate(object):
                  pull_incorrect_attempts_function,
                  pull_incorrect_attempts_args))
 
-    def _check_storage_functions(
+    def _check_login_storage_functions(
             self,
             locked_info_function: Union[str, Callable],
             store_locked_time_function: Union[str, Callable],
@@ -2605,7 +3258,7 @@ class Authenticate(object):
 
         # check whether the inputs are within the correct set of options
         if not self._check_form_inputs(location, 'login') or \
-                not self._check_storage_functions(
+                not self._check_login_storage_functions(
                     locked_info_function, store_locked_time_function,
                     store_unlocked_time_function,
                     store_incorrect_attempts_function,
