@@ -71,6 +71,61 @@ class BQTools(object):
         except Exception as e:
             return ('dev_error', f"Error retrieving BigQuery data: {str(e)}")
 
+    def pull_register_user_locked_info_bigquery(
+            self,
+            bq_creds: dict,
+            project: str,
+            dataset: str,
+            table_name: str,
+            email_col: str,
+            email: str,
+            locked_time_col: str) -> Tuple[str, Union[str, tuple]]:
+        """
+        Pull the latest locked_time for an email from BigQuery.
+
+        :param bq_creds: The credentials to access the BigQuery project.
+            These should, at a minimum, have the roles of "BigQuery Data
+            Editor", "BigQuery Read Session User" and "BigQuery Job User".
+        :param project: The project to pull the data from.
+        :param dataset: The dataset to pull the data from.
+        :param table_name: The table to pull the data from.
+        :param email_col: The column that holds the email.
+        :param email: The email to pull the info for.
+        :param locked_time_col: The column that holds the locked_times.
+        :return: A tuple with an indicator labeling the result as either
+            'success' or 'error', and the latest lock time if successful
+            or the error message if not.
+        """
+        # connect to the database
+        client = self._setup_connection(bq_creds)
+        if isinstance(client, str):
+            # in this case the "client" is an error message
+            return ('dev_error', client)
+
+        table_id = project + "." + dataset + "." + table_name
+
+        # create and run the query
+        sql_statement = (
+            f"SELECT {locked_time_col} FROM {table_id} "
+            f"WHERE {email_col} = '{email}' "
+            f"ORDER BY {locked_time_col} DESC")
+        # run the query
+        query_result = self._run_query(client, sql_statement)
+        if isinstance(query_result, tuple):
+            return query_result
+
+        # create the df pull the first values
+        df = query_result.to_dataframe()
+        try:
+            # sort the locked_time_col column of df
+            df.sort_values(by=locked_time_col, ascending=False, inplace=True)
+            # the latest_lock should be the most recent locked_time
+            latest_lock = df.iloc[0, 0]
+        except Exception as e:
+            latest_lock = None
+
+        return ('success', latest_lock)
+
     def store_user_credentials(
             self,
             user_credentials: dict,
@@ -243,7 +298,7 @@ class BQTools(object):
 
         return ('success', data)
 
-    def pull_locked_info_bigquery(
+    def pull_login_locked_info_bigquery(
             self,
             bq_creds: dict,
             project: str,
@@ -264,13 +319,13 @@ class BQTools(object):
         :param dataset: The dataset to pull the data from.
         :param table_name: The table to pull the data from.
         :param username_col: The column that holds the username.
-        :param username: The username to pull the password for.
+        :param username: The username to pull the info for.
         :param locked_time_col: The column that holds the locked_times.
         :param unlocked_time_col: The column that holds the
             unlocked_times.
         :return: A tuple with an indicator labeling the result as either
-            'success' or 'error', and the hashed password if successful or
-            the error message if not.
+            'success' or 'error', and a tuple of (latest lock time,
+            latest unlock time) if successful or the error message if not.
         """
         # connect to the database
         client = self._setup_connection(bq_creds)
@@ -283,7 +338,7 @@ class BQTools(object):
         # create and run the query
         sql_statement = (
             f"SELECT {locked_time_col}, {unlocked_time_col} FROM {table_id} "
-            f"WHERE {username_col} = '{username}'"
+            f"WHERE {username_col} = '{username}' "
             f"ORDER BY {locked_time_col} DESC, {unlocked_time_col} DESC")
         # run the query
         query_result = self._run_query(client, sql_statement)

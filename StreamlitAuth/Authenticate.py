@@ -618,6 +618,157 @@ class Authenticate(object):
             return False
         return True
 
+    def _add_email_to_args(
+            self, email: str, existing_args: dict) -> dict:
+        """Add the email to existing_args."""
+        if existing_args is None:
+            existing_args = {}
+        existing_args['email'] = email
+        return existing_args
+
+    def _pull_register_user_locked_error_handler(self, indicator: str,
+                                                 value: str) -> bool:
+        """ Records any errors from pulling the latest locked account
+            times."""
+        if indicator == 'dev_error':
+            eh.add_dev_error(
+                'register_user',
+                "There was an error pulling the latest account lock times. "
+                "Error: " + value)
+            return False
+        return True
+
+    def _pull_register_user_locked_info(
+            self,
+            email: str,
+            locked_info_function: Union[str, Callable],
+            locked_info_args: dict) -> Tuple[bool, Union[tuple, None]]:
+        """
+        Pull the most recent locked times from the database.
+
+        :param email: The email to check.
+        :param locked_info_function: The function to pull the locked
+            information associated with the email. This can be a
+            callable function or a string.
+
+            The function should pull in locked_info_args, which can be
+            used for things like accessing and pulling from a database.
+            At a minimum, a callable function should take 'email' as
+            one of the locked_info_args, but can include other arguments
+            as well.
+            A callable function should return:
+            - A tuple of an indicator and a value
+            - The indicator should be either 'dev_error' or 'success'.
+            - The value should be a string that contains the error
+                message when the indicator is 'dev_error' and
+                latest_lock_datetime when the indicator is 'success'.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls the locked datetimes from a BigQuery
+                    table.
+                    This pre-defined version will look for a table with
+                    two columns corresponding to email and locked_time
+                    (see locked_info_args below for how to define there).
+                    Note that if using 'bigquery' here, in our other
+                    database functions, you should also be using the
+                    'bigquery' option or using your own method that writes
+                    to a table set up in the same way.
+        :param locked_info_args: Arguments for the locked_info_function.
+            This should not include 'email' since that will
+            automatically be added here. Instead, it should include things
+            like database name, table name, credentials to log into the
+            database, etc.
+
+            If using 'bigquery' as your locked_info_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails.
+            locked_time_col (str): The name of the column in the BigQuery
+                table that contains the locked_times.
+        :return: Tuple with the first value as True if the data was pulled
+            and False if there was an error, and the second value will be
+            latest_lock_datetime if the data was pulled successfully,
+            and None if there was an error.
+        """
+        # add the username to the arguments for the locked info
+        locked_info_args = self._add_email_to_args(
+            email, locked_info_args)
+        if isinstance(locked_info_function, str):
+            if locked_info_function.lower() == 'bigquery':
+                db = BQTools()
+                indicator, value = db.pull_register_user_locked_info_bigquery(
+                    **locked_info_args)
+            else:
+                indicator, value = (
+                    'dev_error',
+                    "The locked_info_function method is not recognized. "
+                    "The available options are: 'bigquery' or a callable "
+                    "function.")
+        else:
+            indicator, value = locked_info_function(**locked_info_args)
+        if self._pull_register_user_locked_error_handler(indicator, value):
+            return True, value
+        return False, None
+
+    def _check_locked_account_register_user(
+            self,
+            email: str,
+            locked_info_function: Union[str, Callable] = None,
+            locked_info_args: dict = None,
+            locked_hours: int = 24) -> bool:
+        """
+        Check if we have a locked account for the given email.
+
+        This should include checking whether the account is locked in
+        the session_state, which always happens, and checking if there is
+        a lock stored elsewhere, such as in a database. The checking of
+        the lock elsewhere is not required for this function to run, but
+        is HIGHLY RECOMMENDED since the session state can be easily
+        cleared by the user, which would allow them to bypass the lock.
+
+        :param email: The email to check.
+        :param locked_info_function: The function to pull the locked
+            information associated with the email. This can be a
+            callable function or a string. See the docstring for
+            register_user for more information.
+        :param locked_info_args: Arguments for the locked_info_function.
+            See the docstring for register_user for more information.
+        :param locked_hours: The number of hours that the account should
+            be locked for after a certain number of failed login attempts.
+            The desired number of incorrect attempts is set elsewhere.
+        :return: True if the account is LOCKED (or there is an error),
+            False if the account is UNLOCKED.
+        """
+        # if we have a locked_info_function, check that;
+        # otherwise just use what we have saved in the session_state
+        if locked_info_function is not None:
+            # pull the latest locked and unlocked times
+            pull_worked, value = self._pull_register_user_locked_info(
+                email, locked_info_function, locked_info_args)
+            if pull_worked:
+                latest_lock = value
+            else:
+                return True
+        else:
+            if ('register_user_lock' in st.session_state.stauth and
+                    email in st.session_state.stauth[
+                        'register_user_lock'].keys()):
+                latest_lock = max(st.session_state.stauth['register_user_lock'][
+                                      email])
+            else:
+                latest_lock = None
+        return self._is_account_locked(
+            latest_lock, None, locked_hours, 'register_user')
+
     def _register_credentials(self, username: str, password: str,
                               email: str, preauthorization: bool) -> None:
         """
@@ -976,31 +1127,52 @@ class Authenticate(object):
         new_username = st.session_state[username_text_key]
         new_password = st.session_state[password_text_key]
         new_password_repeat = st.session_state[repeat_password_text_key]
+        if auth_code_key in st.session_state:
+            auth_code = st.session_state[auth_code_key]
+        else:
+            auth_code = ''
+
         if self._check_register_user_info(
                 new_email, new_username, new_password, new_password_repeat,
                 preauthorization):
-            self._register_credentials(
-                new_username, new_password, new_email, preauthorization)
-            # we can either try to save credentials and email, save
-            # credentials and not email, just email, or none of the above
-            if cred_save_function is not None:
-                error = self._save_user_credentials(
-                    cred_save_function, cred_save_args)
-                if self._cred_save_error_handler(error):
-                    if email_user is not None:
-                        self._send_user_email(
-                            'register_user', email_inputs,
-                            new_email, email_user, email_creds, new_username)
-                    else:
-                        eh.clear_errors()
-            elif email_user is not None:
-                self._send_user_email(
-                    'register_user', email_inputs, new_email,
-                    email_user, email_creds, new_username)
+            # first see if the account should be locked
+            if preauthorization:
+                if self._check_locked_account_register_user(
+                        new_email, locked_info_function, locked_info_args,
+                        locked_hours):
+                    creds_verified = False
+                else:
+                    # check auth code matches email
+                    # if so, good
+                    # if not, store incorrect attempts, check too many
+                    # attempts and store lock time
+                    creds_verified = True
             else:
-                # get rid of any errors, since we have successfully
-                # registered
-                eh.clear_errors()
+                creds_verified = True
+
+            if creds_verified:
+                self._register_credentials(
+                    new_username, new_password, new_email, preauthorization)
+                # we can either try to save credentials and email, save
+                # credentials and not email, just email, or none of the above
+                if cred_save_function is not None:
+                    error = self._save_user_credentials(
+                        cred_save_function, cred_save_args)
+                    if self._cred_save_error_handler(error):
+                        if email_user is not None:
+                            self._send_user_email(
+                                'register_user', email_inputs,
+                                new_email, email_user, email_creds, new_username)
+                        else:
+                            eh.clear_errors()
+                elif email_user is not None:
+                    self._send_user_email(
+                        'register_user', email_inputs, new_email,
+                        email_user, email_creds, new_username)
+                else:
+                    # get rid of any errors, since we have successfully
+                    # registered
+                    eh.clear_errors()
 
     def register_user(
             self,
@@ -1855,8 +2027,8 @@ class Authenticate(object):
         del password_pull_args['password_col']
         return password_pull_args
 
-    def _pull_locked_unlocked_error_handler(self, indicator: str,
-                                            value: str) -> bool:
+    def _pull_login_locked_unlocked_error_handler(self, indicator: str,
+                                                  value: str) -> bool:
         """ Records any errors from pulling the latest locked and unlocked
             account times."""
         if indicator == 'dev_error':
@@ -1868,7 +2040,7 @@ class Authenticate(object):
             return False
         return True
 
-    def _pull_locked_unlocked_info(
+    def _pull_login_locked_unlocked_info(
             self,
             username: str,
             locked_info_function: Union[str, Callable],
@@ -1943,7 +2115,7 @@ class Authenticate(object):
         if isinstance(locked_info_function, str):
             if locked_info_function.lower() == 'bigquery':
                 db = BQTools()
-                indicator, value = db.pull_locked_info_bigquery(
+                indicator, value = db.pull_login_locked_info_bigquery(
                     **locked_info_args)
             else:
                 indicator, value = (
@@ -1953,14 +2125,15 @@ class Authenticate(object):
                     "function.")
         else:
             indicator, value = locked_info_function(**locked_info_args)
-        if self._pull_locked_unlocked_error_handler(indicator, value):
+        if self._pull_login_locked_unlocked_error_handler(indicator, value):
             return True, value
         return False, None
 
     def _is_account_locked(self,
                            latest_lock: datetime,
                            latest_unlock: datetime,
-                           locked_hours: int) -> bool:
+                           locked_hours: int,
+                           form: str) -> bool:
         """
         Check whether the account has been locked more recently than
         unlocked.
@@ -1983,12 +2156,12 @@ class Authenticate(object):
                 (latest_lock is not None and latest_unlock is None
                  and latest_lock > locked_time)):
             eh.add_user_error(
-                'login',
+                form,
                 "Your account is locked. Please try again later.")
             return True
         return False
 
-    def _check_locked_account(
+    def _check_locked_account_login(
             self,
             username: str,
             locked_info_function: Union[str, Callable] = None,
@@ -2021,7 +2194,7 @@ class Authenticate(object):
         # otherwise just use what we have saved in the session_state
         if locked_info_function is not None:
             # pull the latest locked and unlocked times
-            pull_worked, values = self._pull_locked_unlocked_info(
+            pull_worked, values = self._pull_login_locked_unlocked_info(
                 username, locked_info_function, locked_info_args)
             if pull_worked:
                 latest_lock, latest_unlock = values
@@ -2042,7 +2215,7 @@ class Authenticate(object):
             else:
                 latest_unlock = None
         return self._is_account_locked(
-            latest_lock, latest_unlock, locked_hours)
+            latest_lock, latest_unlock, locked_hours, 'login')
 
     def _password_pull_error_handler(self, indicator: str,
                                      value: str) -> bool:
@@ -2587,7 +2760,7 @@ class Authenticate(object):
             attempts_pull_worked, attempts = self._pull_incorrect_attempts(
                 username, pull_incorrect_attempts_function,
                 pull_incorrect_attempts_args)
-            locks_pull_worked, lock_unlock = self._pull_locked_unlocked_info(
+            locks_pull_worked, lock_unlock = self._pull_login_locked_unlocked_info(
                 username, locked_info_function, locked_info_args)
             _, latest_unlock = lock_unlock
         else:
@@ -2734,8 +2907,8 @@ class Authenticate(object):
         if self._check_login_info(username, password) and \
                 self._check_username(username):
             # first see if the account should be locked
-            if self._check_locked_account(username, locked_info_function,
-                                          locked_info_args, locked_hours):
+            if self._check_locked_account_login(username, locked_info_function,
+                                                locked_info_args, locked_hours):
                 st.session_state.stauth['username'] = None
                 st.session_state.stauth['authentication_status'] = False
             else:
