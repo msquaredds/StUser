@@ -762,12 +762,394 @@ class Authenticate(object):
             if ('register_user_lock' in st.session_state.stauth and
                     email in st.session_state.stauth[
                         'register_user_lock'].keys()):
-                latest_lock = max(st.session_state.stauth['register_user_lock'][
-                                      email])
+                latest_lock = max(st.session_state.stauth[
+                                      'register_user_lock'][email])
             else:
                 latest_lock = None
         return self._is_account_locked(
             latest_lock, None, locked_hours, 'register_user')
+
+    def _rename_auth_code_pull_args(self, auth_code_pull_args: dict) -> dict:
+        """Update the target and reference columns and reference value."""
+        auth_code_pull_args['reference_col'] = auth_code_pull_args[
+            'email_col']
+        auth_code_pull_args['reference_value'] = auth_code_pull_args[
+            'email']
+        auth_code_pull_args['target_col'] = auth_code_pull_args['auth_code_col']
+        del auth_code_pull_args['email_col']
+        del auth_code_pull_args['email']
+        del auth_code_pull_args['auth_code_col']
+        return auth_code_pull_args
+
+    def _auth_code_pull_error_handler(self, indicator: str,
+                                      value: str) -> bool:
+        """ Records any errors from the authorization code pulling
+            process."""
+        if indicator == 'dev_error':
+            eh.add_dev_error(
+                'register_user',
+                "There was an error checking the user's authorization code. "
+                "Error: " + value)
+            return False
+        elif indicator == 'user_error':
+            eh.add_user_error(
+                'register_user',
+                "Incorrect email or authorization code.")
+            return False
+        return True
+
+    def _auth_code_verification_error_handler(
+            self, verified: Union[bool, tuple]) -> bool:
+        """Check if the authorization code was verified and record an
+            error if not."""
+        if isinstance(verified, tuple):
+            # if we have a tuple, that means we had a 'dev_errors'
+            # issue, which should be handled accordingly
+            eh.add_dev_error(
+                'register_user',
+                "There was an error checking the user's authorization code. "
+                "Error: " + verified[1])
+            return False
+        elif verified:
+            return True
+        else:
+            eh.add_user_error(
+                'register_user',
+                "Incorrect email or authorization code.")
+            return False
+
+    def _check_auth_code(
+            self,
+            auth_code: str,
+            email: str,
+            auth_code_pull_function: Union[str, Callable],
+            auth_code_pull_args: dict = None) -> bool:
+        """
+        Pulls the expected authorization code and checks the validity of
+        the entered authorization code.
+
+        :param auth_code: The entered authorization code.
+        :param email: The entered email.
+        :param auth_code_pull_function: The function to pull the hashed
+            authorization code associated with the email. This can be a
+            callable function or a string.
+
+            At a minimum, a callable function should take 'email' as
+            an argument, but can include other arguments as well.
+            A callable function should return:
+             - A tuple of an indicator and a value
+             - The indicator should be either 'dev_error', 'user_error'
+                or 'success'.
+             - The value should be a string that contains the error
+                message when the indicator is 'dev_error', None when the
+                indicator is 'user_error', and the hashed authorization
+                code when the indicator is 'success'. It is None with
+                'user_error' since we will handle that in the calling
+                function and create a user_error that tells the user that
+                the email or authorization code is incorrect.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls the authorization code from a BigQuery
+                table.
+        :param auth_code_pull_args: Arguments for the
+            auth_code_pull_function. This should not include 'email'
+            since that will automatically be added here based on the
+            user's input.
+
+            If using 'bigquery' as your auth_code_pull_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails.
+            auth_code_col (str): The name of the column in the BigQuery
+                table that contains the authorization codes.
+        """
+        # add the email to the arguments for the authorization code pull
+        # function
+        auth_code_pull_args = self._add_email_to_args(
+            email, auth_code_pull_args)
+        # pull the authorization code
+        if isinstance(auth_code_pull_function, str):
+            if auth_code_pull_function.lower() == 'bigquery':
+                auth_code_pull_args = self._rename_auth_code_pull_args(
+                    auth_code_pull_args)
+                db = BQTools()
+                indicator, value = db.pull_value_based_on_other_col_value(
+                    **auth_code_pull_args)
+            else:
+                indicator, value = (
+                    'dev_error',
+                    "The auth_code_pull_function method is not recognized. "
+                    "The available options are: 'bigquery' or a callable "
+                    "function.")
+        else:
+            indicator, value = auth_code_pull_function(**auth_code_pull_args)
+
+        # only continue if we didn't have any issues getting the
+        # authorization code
+        if self._auth_code_pull_error_handler(indicator, value):
+            verified = Hasher([auth_code]).check([value])[0]
+            # we can have errors here if the authorization code doesn't
+            # match or there is an issue running the check
+            return self._auth_code_verification_error_handler(verified)
+        return False
+
+    def _store_incorrect_auth_code_attempts_handler(
+            self,
+            email: str,
+            store_incorrect_attempts_function: Union[str, Callable],
+            store_incorrect_attempts_args: dict) -> bool:
+        """
+        Attempts to store the incorrect attempt time and email, deals
+        with any errors and updates the session_state as necessary.
+
+        :param email: The email to store the lock time for.
+        :param store_incorrect_attempts_function: The function to store
+            the incorrect attempts associated with the email. This can
+            be a callable function or a string. See the docstring for
+            register_user for more information.
+        :param store_incorrect_attempts_args: Arguments for the
+            store_incorrect_attempts_function. See the docstring for
+            register_user for more information.
+
+        :return: False if any errors, True if no errors.
+        """
+        if 'failed_auth_attempts' not in st.session_state.stauth:
+            st.session_state.stauth['failed_auth_attempts'] = {}
+        if email not in st.session_state.stauth[
+                'failed_auth_attempts'].keys():
+            st.session_state.stauth['failed_auth_attempts'][email] = []
+        # append the current datetime
+        st.session_state.stauth['failed_auth_attempts'][email].append(
+            datetime.utcnow())
+
+        if store_incorrect_attempts_function is not None:
+            error = self._store_incorrect_attempt(
+                email, store_incorrect_attempts_function,
+                store_incorrect_attempts_args, 'register_user')
+            return self._incorrect_attempts_error_handler(
+                error, 'register_user')
+        else:
+            return True
+
+    def _check_too_many_auth_code_attempts(
+            self,
+            email: str,
+            pull_incorrect_attempts_function: Union[str, Callable] = None,
+            pull_incorrect_attempts_args: dict = None,
+            locked_hours: int = 24,
+            incorrect_attempts: int = 10) -> bool:
+        """
+        Check if we have too many authorization code attempts for the
+        given email.
+
+        :param email: The email to check.
+        :param pull_incorrect_attempts_function: The function to pull the
+            incorrect attempts associated with the email. This can be a
+            callable function or a string. See the docstring for
+            register_user for more information.
+        :param pull_incorrect_attempts_args: Arguments for the
+            pull_incorrect_attempts_function. See the docstring for
+            register_user for more information.
+        :param locked_hours: The number of hours that the account should
+            be locked for after a certain number of failed authorization
+            code attempts.
+        :param incorrect_attempts: The number of incorrect attempts
+            allowed before the account is locked.
+
+        :return: True if account should be locked, False if account should
+            be unlocked.
+        """
+        # first try pulling the data from a database if we have one we
+        # are using for this purpose
+        if pull_incorrect_attempts_function is not None:
+            attempts_pull_worked, attempts = self._pull_incorrect_attempts(
+                username, 'register_user',
+                pull_incorrect_attempts_function, pull_incorrect_attempts_args)
+        else:
+            # if not, just use the session_state
+            if ('failed_auth_attempts' in st.session_state.stauth and
+                    email in st.session_state.stauth[
+                        'failed_auth_attempts'].keys()):
+                attempts = pd.Series(st.session_state.stauth[
+                                         'failed_auth_attempts'][email])
+            else:
+                attempts = None
+            attempts_pull_worked = True
+
+        if attempts_pull_worked and attempts is not None:
+            # sort attempts by datetime, starting with the most recent
+            attempts = attempts.sort_values(ascending=False)
+            # count the number of attempts in the last locked_hours
+            recent_attempts = attempts[
+                attempts > datetime.utcnow() - timedelta(hours=locked_hours)]
+            if len(recent_attempts) >= incorrect_attempts:
+                eh.add_user_error(
+                    'register_user',
+                    "Your account is locked. Please try again later.")
+                return True
+            else:
+                return False
+        elif attempts is None:
+            return False
+        else:
+            # if the data pulls didn't work, we want to lock the account
+            # to be safe
+            eh.add_user_error(
+                'register_user',
+                "Your account is locked. Please try again later.")
+            return True
+
+    def _store_auth_code_lock_time_handler(
+            self,
+            email: str,
+            store_locked_time_function: Union[str, Callable],
+            store_locked_time_args: dict) -> None:
+        """
+        Attempts to store the lock time, deals with any errors and
+        updates the session_state as necessary.
+
+        :param email: The email to store the lock time for.
+        :param store_locked_time_function: The function to store the
+            locked times associated with the email. This can be a
+            callable function or a string. See the docstring for
+            register_user for more information.
+        :param store_locked_time_args: Arguments for the
+            store_locked_times_function. See the docstring for
+            register_user for more information.
+        """
+        if 'register_user_lock' not in st.session_state.stauth:
+            st.session_state.stauth['register_user_lock'] = {}
+        if username not in st.session_state.stauth[
+            'register_user_lock'].keys():
+            st.session_state.stauth['register_user_lock'][email] = []
+        # append the current datetime
+        st.session_state.stauth['register_user_lock'][email].append(
+            datetime.utcnow())
+
+        if store_locked_time_function is not None:
+            error = self._store_lock_unlock_time(
+                email, store_locked_time_function, store_locked_time_args,
+                'lock')
+            self._lock_time_save_error_handler(error, 'register_user')
+
+    def _check_preauthorization_code(
+            self,
+            new_email: str,
+            auth_code: str,
+            auth_code_pull_function: Union[str, Callable],
+            auth_code_pull_args: dict,
+            incorrect_attempts: int,
+            locked_hours: int,
+            locked_info_function: Union[str, Callable],
+            locked_info_args: dict,
+            store_locked_time_function: Union[str, Callable],
+            store_locked_time_args: dict,
+            store_incorrect_attempts_function: Union[str, Callable],
+            store_incorrect_attempts_args: dict,
+            pull_incorrect_attempts_function: Union[str, Callable],
+            pull_incorrect_attempts_args: dict) -> bool:
+        """
+        Check to see if the account is locked and, if not, if the
+        preauthorization code is correct. If not, store the incorrect
+        attempt and lock the account if we have too many incorrect
+        attempts.
+
+        :param new_email: The new user's email.
+        :param auth_code: The entered authorization code.
+        :param auth_code_pull_function: The function to pull the
+            authorization code associated with the email. This can be a
+            callable function or a string. See the docstring for
+            register_user for more information.
+        :param auth_code_pull_args: Arguments for the
+            auth_code_pull_function. See the docstring for register_user
+            for more information.
+        :param incorrect_attempts: The number of incorrect attempts
+            allowed before the account is locked.
+        :param locked_hours: The number of hours the account is locked
+            after exceeding the number of incorrect attempts.
+
+        The following parameters are all associated with preauthorization
+        and the pattern of storing incorrect registration attempts to a
+        database, as well as storing the times of an email being locked.
+        If too many incorrect attempts occur at registration, the account
+        is locked for locked_hours.
+        Unlike with login, we don't have an unlock time, since that just
+        means the user was able to register, which should only happen
+        once.
+        This database pattern isn't required, but is HIGHLY RECOMMENDED.
+        If not used, the session_state will still record incorrect
+        registration attempts and if an account is locked, but that
+        can easily be disregarded by refreshing the website.
+        Only necessary if preauthorization is True.
+
+        :param locked_info_function: The function to pull the locked
+            information associated with the email. This can be a
+            callable function or a string. See the docstring for
+            register_user for more information.
+        :param locked_info_args: Arguments for the locked_info_function.
+            See the docstring for register_user for more information.
+        :param store_locked_time_function: The function to store the
+            locked times associated with the email. This can be a
+            callable function or a string. See the docstring for
+            register_user for more information.
+        :param store_locked_time_args: Arguments for the
+            store_locked_times_function. See the docstring for
+            register_user for more information.
+        :param store_incorrect_attempts_function: The function to store
+            the incorrect attempts associated with the email. This can
+            be a callable function or a string. See the docstring for
+            register_user for more information.
+        :param store_incorrect_attempts_args: Arguments for the
+            store_incorrect_attempts_function. See the docstring for
+            register_user for more information.
+        :param pull_incorrect_attempts_function: The function to pull the
+            incorrect attempts associated with the email. This can be a
+            callable function or a string. See the docstring for
+            register_user for more information.
+        :param pull_incorrect_attempts_args: Arguments for the
+            pull_incorrect_attempts_function. See the docstring for
+            register_user for more information.
+
+        :return: True if the account is authorized to register, False if
+            the account is locked or the authorization code is incorrect.
+        """
+        # first see if the account should be locked
+        if self._check_locked_account_register_user(
+                new_email, locked_info_function, locked_info_args,
+                locked_hours):
+            return False
+        else:
+            # only continue if the authorization code is correct
+            if self._check_auth_code(auth_code,
+                                     new_email,
+                                     auth_code_pull_function,
+                                     auth_code_pull_args):
+                return True
+            else:
+                if (not self._store_incorrect_auth_code_attempts_handler(
+                        new_email, store_incorrect_attempts_function,
+                        store_incorrect_attempts_args)
+                        or
+                        self._check_too_many_auth_code_attempts(
+                            new_email,
+                            pull_incorrect_attempts_function,
+                            pull_incorrect_attempts_args,
+                            locked_hours, incorrect_attempts)):
+                    self._store_auth_code_lock_time_handler(
+                        new_email, store_locked_time_function,
+                        store_locked_time_args)
+                    return False
+                else:
+                    return True
 
     def _register_credentials(self, username: str, password: str,
                               email: str, preauthorization: bool) -> None:
@@ -1135,18 +1517,16 @@ class Authenticate(object):
         if self._check_register_user_info(
                 new_email, new_username, new_password, new_password_repeat,
                 preauthorization):
-            # first see if the account should be locked
             if preauthorization:
-                if self._check_locked_account_register_user(
-                        new_email, locked_info_function, locked_info_args,
-                        locked_hours):
-                    creds_verified = False
-                else:
-                    # check auth code matches email
-                    # if so, good
-                    # if not, store incorrect attempts, check too many
-                    # attempts and store lock time
-                    creds_verified = True
+                creds_verified = self._check_preauthorization_code(
+                    new_email, auth_code, auth_code_pull_function,
+                    auth_code_pull_args, incorrect_attempts, locked_hours,
+                    locked_info_function, locked_info_args,
+                    store_locked_time_function, store_locked_time_args,
+                    store_incorrect_attempts_function,
+                    store_incorrect_attempts_args,
+                    pull_incorrect_attempts_function,
+                    pull_incorrect_attempts_args)
             else:
                 creds_verified = True
 
@@ -1154,7 +1534,8 @@ class Authenticate(object):
                 self._register_credentials(
                     new_username, new_password, new_email, preauthorization)
                 # we can either try to save credentials and email, save
-                # credentials and not email, just email, or none of the above
+                # credentials and not email, just email, or none of the
+                # above
                 if cred_save_function is not None:
                     error = self._save_user_credentials(
                         cred_save_function, cred_save_args)
@@ -1162,7 +1543,8 @@ class Authenticate(object):
                         if email_user is not None:
                             self._send_user_email(
                                 'register_user', email_inputs,
-                                new_email, email_user, email_creds, new_username)
+                                new_email, email_user, email_creds,
+                                new_username)
                         else:
                             eh.clear_errors()
                 elif email_user is not None:
@@ -2336,32 +2718,34 @@ class Authenticate(object):
 
     def _store_lock_unlock_time(
             self,
-            username: str,
+            username_or_email: str,
             store_function: Union[str, Callable],
             store_args: dict,
-            lock_or_unlock: str) -> Union[None, str]:
+            lock_or_unlock: str,
+            auth_type: str = None) -> Union[None, str]:
         """
-        Store the locked or unlocked time associated with the username.
+        Store the locked or unlocked time associated with the username
+        or email.
 
-        :param username: The username to store the lock or unlock time
-            for.
+        :param username_or_email: The username or email to store the lock
+            or unlock time for.
         :param store_unlocked_time_function: The function to store the
-            unlocked datetime associated with the username. This can be a
-            callable function or a string.
+            unlocked datetime associated with the username or email. This \
+            can be a callable function or a string.
 
             The function should pull in store_unlocked_time_args, which
             can be used for things like accessing and storing to a
             database. At a minimum, a callable function should take
-            'username' as one of the store_unlocked_time_args, but can
-            include other arguments as well. A callable function can
-            return an error message as a string, which our error handler
-            will handle.
+            'username_or_email' as one of the store_unlocked_time_args,
+            but can include other arguments as well. A callable function
+            can return an error message as a string, which our error
+            handler will handle.
 
             The current pre-defined function types are:
                 'bigquery': Stores the unlocked datetime to a BigQuery
                     table. This pre-defined version will look for a table
-                    with three columns corresponding to username,
-                    locked_time and unlocked_time (see
+                    with two columns corresponding to username/email and
+                    locked_time or username/email and unlocked_time (see
                     store_unlocked_time_args below for how to define
                     there).
                     Note that if using 'bigquery' here, in our other
@@ -2370,9 +2754,9 @@ class Authenticate(object):
                     from a table set up in the same way.
         :param store_unlocked_time_args: Arguments for the
             store_unlocked_time_function. This should not include
-            'username' since that will automatically be added here.
-            Instead, it should include things like database name, table
-            name, credentials to log into the database, etc.
+            'username_or_email' since that will automatically be added
+            here. Instead, it should include things like database name,
+            table name, credentials to log into the database, etc.
 
             If using 'bigquery' as your store_unlocked_time_function, the
             following arguments are required:
@@ -2385,22 +2769,35 @@ class Authenticate(object):
             dataset (str): The name of the dataset in the BigQuery table.
             table_name (str): The name of the table in the BigQuery
                 dataset.
-            username_col (str): The name of the column in the BigQuery
-                table that contains the usernames.
+            username_col (str): The name of the column in the
+                BigQuery table that contains the usernames.
+            OR
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails. The code will pull the
+                correct version (username_col or email_col) depending on
+                the auth_type variable.
             locked_time_col (str): The name of the column in the BigQuery
                 table that contains the locked_times.
             unlocked_time_col (str): The name of the column in the
                 BigQuery table that contains the unlocked_times.
         :param lock_or_unlock: Whether we are storing a lock or unlock
             time. Literally 'lock' or 'unlock'.
+        :param auth_type: The type of authentication that the incorrect
+            attempt is associated with. This can be 'login' or
+            'register_user'. Only required if
+            store_incorrect_attempts_function is 'bigquery'.
 
         :return: None if there is no error, a string error message if
             there is an error.
         """
-        store_args = self._add_username_to_args(username, store_args)
+        store_args = self._add_username_or_email_to_args(
+            username_or_email, store_args)
         if isinstance(store_function, str):
             if store_function.lower() == 'bigquery':
                 store_args['lock_or_unlock'] = lock_or_unlock
+                # change the column names to match the bigquery table
+                store_args = self._rename_incorrect_attempt_args(store_args,
+                                                                 auth_type)
                 db = BQTools()
                 error = db.store_lock_unlock_times(**store_args)
             else:
@@ -2454,17 +2851,18 @@ class Authenticate(object):
                 store_unlocked_time_args, 'unlock')
             self._unlock_time_save_error_handler(error)
 
-    def _lock_time_save_error_handler(self, error: str) -> None:
+    def _lock_time_save_error_handler(self, error: str,
+                                      form: str) -> None:
         """
         Records any errors from the lock time saving process.
         """
         if error is not None:
             eh.add_dev_error(
-                'login',
+                form,
                 "There was an error saving the lock time. "
                 "Error: " + error)
 
-    def _store_lock_time_handler(
+    def _store_login_lock_time_handler(
             self,
             username: str,
             store_locked_time_function: Union[str, Callable],
@@ -2495,44 +2893,69 @@ class Authenticate(object):
             error = self._store_lock_unlock_time(
                 username, store_locked_time_function, store_locked_time_args,
                 'lock')
-            self._lock_time_save_error_handler(error)
+            self._lock_time_save_error_handler(error, 'login')
+
+    def _add_username_or_email_to_args(
+            self, username_or_email: str, existing_args: dict) -> dict:
+        """Add the username or email to existing_args."""
+        if existing_args is None:
+            existing_args = {}
+        existing_args['username_or_email'] = username_or_email
+        return existing_args
+
+    def _rename_incorrect_attempt_args(
+            self, incorrect_attempts_args: dict,
+            auth_type: str) -> dict:
+        """Update the target and reference columns and reference value."""
+        if auth_type == 'login':
+            incorrect_attempts_args['username_or_email_col'] = (
+                incorrect_attempts_args['username_col'])
+            del incorrect_attempts_args['username_col']
+        else:
+            incorrect_attempts_args['username_or_email_col'] = (
+                incorrect_attempts_args['email_col'])
+            del incorrect_attempts_args['email_col']
+        return incorrect_attempts_args
 
     def _store_incorrect_attempt(
             self,
-            username: str,
+            username_or_email: str,
             store_incorrect_attempts_function: Union[str, Callable],
-            store_incorrect_attempts_args: dict) -> Union[None, str]:
+            store_incorrect_attempts_args: dict,
+            auth_type: str = None) -> Union[None, str]:
         """
-        Store the datetime associated with the username for an incorrect
-        login attempt.
+        Store the datetime associated with the username or email for an
+        incorrect authorization (either login or registering with an
+        authorization code) attempt.
 
-        :param username: The username to store the lock or unlock time
-            for.
+        :param username_or_email: The username or email to store the lock
+            time for.
         :param store_incorrect_attempts_function: The function to store
-            the datetime and username when an incorrect login attempt
-            occurs. This can be a callable function or a string. At a
-            minimum, a callable function should take 'username' as an
-            argument, but can include other arguments as well. The
-            function should pull in store_incorrect_attempts_args, which
-            can be used for things like accessing and storing to a
-            database. A callable function can return an error message as a
-            string, which our error handler will handle.
+            the datetime and username or email when an incorrect
+            authorization attempt occurs. This can be a callable function
+            or a string. At a minimum, a callable function should take
+            'username_or_email' as an argument, but can include other
+            arguments as well. The function should pull in
+            store_incorrect_attempts_args, which can be used for things
+            like accessing and storing to a database. A callable function
+            can return an error message as a string, which our error
+            handler will handle.
 
             The current pre-defined function types are:
                 'bigquery': Stores the attempted datetime to a BigQuery
                     table. This pre-defined version will look for a table
-                    with two columns corresponding to username and
-                    datetime (see store_incorrect_attempts_args below for
-                    how to define there).
+                    with two columns corresponding to username or email
+                    and datetime (see store_incorrect_attempts_args below
+                    for how to define there).
                     Note that if using 'bigquery' here, in our other
                     database functions, you should also be using the
                     'bigquery' option or using your own method that pulls
                     from a table set up in the same way.
         :param store_incorrect_attempts_args: Arguments for the
             store_incorrect_attempts_function. This should not include
-            'username' since that will automatically be added here.
-            Instead, it should include things like database name, table
-            name, credentials to log into the database, etc.
+            'username_or_email' since that will automatically be added
+            here. Instead, it should include things like database name,
+            table name, credentials to log into the database, etc.
 
             If using 'bigquery' as your store_incorrect_attempts_function,
             the following arguments are required:
@@ -2545,20 +2968,33 @@ class Authenticate(object):
             dataset (str): The name of the dataset in the BigQuery table.
             table_name (str): The name of the table in the BigQuery
                 dataset.
-            username_col (str): The name of the column in the BigQuery
-                table that contains the usernames.
+            username_col (str): The name of the column in the
+                BigQuery table that contains the usernames.
+            OR
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails. The code will pull the
+                correct version (username_col or email_col) depending on
+                the auth_type variable.
             datetime_col (str): The name of the column in the BigQuery
                 table that contains the datetime.
+        :param auth_type: The type of authentication that the incorrect
+            attempt is associated with. This can be 'login' or
+            'register_user'. Only required if
+            store_incorrect_attempts_function is 'bigquery'.
 
         :return error: The error message if there is an error, otherwise
             None.
         """
-        store_incorrect_attempts_args = self._add_username_to_args(
-            username, store_incorrect_attempts_args)
+        store_incorrect_attempts_args = self._add_username_or_email_to_args(
+            username_or_email, store_incorrect_attempts_args)
         if isinstance(store_incorrect_attempts_function, str):
             if store_incorrect_attempts_function.lower() == 'bigquery':
+                # change the column names to match the bigquery table
+                store_incorrect_attempts_args = (
+                    self._rename_incorrect_attempt_args(
+                        store_incorrect_attempts_args, auth_type))
                 db = BQTools()
-                error = db.store_incorrect_login_times(
+                error = db.store_incorrect_auth_times(
                     **store_incorrect_attempts_args)
             else:
                 error = ("The store_incorrect_attempts_function method is not "
@@ -2569,19 +3005,20 @@ class Authenticate(object):
                 **store_incorrect_attempts_args)
         return error
 
-    def _incorrect_attempts_error_handler(self, error: str) -> None:
+    def _incorrect_attempts_error_handler(self, error: str,
+                                          form: str) -> None:
         """
         Records any errors from the incorrect attempt saving process.
         """
         if error is not None:
             eh.add_dev_error(
-                'login',
+                form,
                 "There was an error saving the incorrect attempt time. "
                 "Error: " + error)
             return False
         return True
 
-    def _store_incorrect_attempts_handler(
+    def _store_incorrect_login_attempts_handler(
             self,
             username: str,
             store_incorrect_attempts_function: Union[str, Callable],
@@ -2614,42 +3051,46 @@ class Authenticate(object):
         if store_incorrect_attempts_function is not None:
             error = self._store_incorrect_attempt(
                 username, store_incorrect_attempts_function,
-                store_incorrect_attempts_args)
-            return self._incorrect_attempts_error_handler(error)
+                store_incorrect_attempts_args, 'login')
+            return self._incorrect_attempts_error_handler(error, 'login')
         else:
             return True
 
-    def _incorrect_attempts_pull_error_handler(self, indicator: str,
-                                               value: str) -> bool:
+    def _incorrect_attempts_pull_error_handler(
+            self, indicator: str, value: str, form: str) -> bool:
         """ Records any errors from the incorrect attempts pulling
             process."""
         if indicator == 'dev_error':
             eh.add_dev_error(
-                'login',
-                "There was an error pulling incorrect login attempts. "
+                form,
+                "There was an error pulling incorrect attempts. "
                 "Error: " + value)
             return False
         return True
 
     def _pull_incorrect_attempts(
             self,
-            username: str,
+            username_or_email: str,
+            auth_type: str,
             pull_incorrect_attempts_function: Union[str, Callable] = None,
             pull_incorrect_attempts_args: dict = None) -> (
             Tuple[bool, Union[pd.Series, None]]):
         """
-        Pull incorrect login attempts for a given username.
+        Pull incorrect authorization (either login or registering with an
+        authorization code) attempts for a given username or email.
 
-        :param username: The username to check.
+        :param username: The username or email to check.
         :param pull_incorrect_attempts_function: The function to pull the
-            datetimes associated with a username for incorrect login
-            attempts. This can be a callable function or a string.
+            datetimes associated with a username or email for incorrect
+            authorization attempts. This can be a callable function or a
+            string.
 
             The function should pull in pull_incorrect_attempts_args,
             which can be used for things like accessing and pulling from a
             database. At a minimum, a callable function should take
-            'username' as one of the pull_incorrect_attempts_args, but can
-            include other arguments as well.
+            'username_or_email' as one of the
+            pull_incorrect_attempts_args, but can include other arguments
+            as well.
             A callable function should return:
             - A tuple of an indicator and a value
             - The indicator should be either 'dev_error' or 'success'.
@@ -2659,21 +3100,21 @@ class Authenticate(object):
                 data does not exist) when the indicator is 'success'.
 
             The current pre-defined function types are:
-                'bigquery': Pulls the incorrect login datetimes from a
-                    BigQuery table.
+                'bigquery': Pulls the incorrect authorization datetimes
+                    from a BigQuery table.
                     This pre-defined version will look for a table
-                    with two columns corresponding to username and
-                    datetime (see pull_incorrect_attempts_args below for
-                    how to define there).
+                    with two columns corresponding to username or email
+                    and datetime (see pull_incorrect_attempts_args below
+                    for how to define there).
                     Note that if using 'bigquery' here, in our other
                     database functions, you should also be using the
                     'bigquery' option or using your own method that pulls
                     from a table set up in the same way.
         :param pull_incorrect_attempts_args: Arguments for the
             pull_incorrect_attempts_function. This should not include
-            'username' since that will automatically be added here.
-            Instead, it should include things like database name, table
-            name, credentials to log into the database, etc.
+            'username_or_email' since that will automatically be added
+            here. Instead, it should include things like database name,
+            table name, credentials to log into the database, etc.
 
             If using 'bigquery' as your pull_incorrect_attempts_function,
             the following arguments are required:
@@ -2686,10 +3127,19 @@ class Authenticate(object):
             dataset (str): The name of the dataset in the BigQuery table.
             table_name (str): The name of the table in the BigQuery
                 dataset.
-            username_col (str): The name of the column in the BigQuery
-                table that contains the usernames.
+            username_col (str): The name of the column in the
+                BigQuery table that contains the usernames.
+            OR
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails. The code will pull the
+                correct version (username_col or email_col) depending on
+                the auth_type variable.
             datetime_col (str): The name of the column in the BigQuery
                 table that contains the datetime.
+        :param auth_type: The type of authentication that the incorrect
+            attempt is associated with. This can be 'login' or
+            'register_user'. Only required if
+            store_incorrect_attempts_function is 'bigquery'
 
         :return: Tuple with the first value of True if the pull worked and
             False if there were errors with the pull. The second value
@@ -2698,11 +3148,15 @@ class Authenticate(object):
             exists in the database. The second value will be None if there
             was an error.
         """
-        # add the username to the arguments
-        pull_incorrect_attempts_args = self._add_username_to_args(
-            username, pull_incorrect_attempts_args)
+        # add the username or email to the arguments
+        pull_incorrect_attempts_args = self._add_username_or_email_to_args(
+            username_or_email, pull_incorrect_attempts_args)
         if isinstance(pull_incorrect_attempts_function, str):
             if pull_incorrect_attempts_function.lower() == 'bigquery':
+                # change the column names to match the bigquery table
+                pull_incorrect_attempts_args = (
+                    self._rename_incorrect_attempt_args(
+                        pull_incorrect_attempts_args, auth_type))
                 db = BQTools()
                 indicator, value = db.pull_incorrect_attempts(
                     **pull_incorrect_attempts_args)
@@ -2716,11 +3170,12 @@ class Authenticate(object):
             indicator, value = pull_incorrect_attempts_function(
                 **pull_incorrect_attempts_args)
 
-        if self._incorrect_attempts_pull_error_handler(indicator, value):
+        if self._incorrect_attempts_pull_error_handler(indicator, value,
+                                                       auth_type):
             return True, value
         return False, None
 
-    def _check_too_many_attempts(
+    def _check_too_many_login_attempts(
             self,
             username: str,
             pull_incorrect_attempts_function: Union[str, Callable] = None,
@@ -2758,10 +3213,11 @@ class Authenticate(object):
         # are using for this purpose
         if pull_incorrect_attempts_function is not None:
             attempts_pull_worked, attempts = self._pull_incorrect_attempts(
-                username, pull_incorrect_attempts_function,
+                username, 'login', pull_incorrect_attempts_function,
                 pull_incorrect_attempts_args)
-            locks_pull_worked, lock_unlock = self._pull_login_locked_unlocked_info(
-                username, locked_info_function, locked_info_args)
+            locks_pull_worked, lock_unlock = (
+                self._pull_login_locked_unlocked_info(
+                    username, locked_info_function, locked_info_args))
             _, latest_unlock = lock_unlock
         else:
             # if not, just use the session_state
@@ -2930,16 +3386,16 @@ class Authenticate(object):
                 else:
                     st.session_state.stauth['username'] = None
                     st.session_state.stauth['authentication_status'] = False
-                    if (not self._store_incorrect_attempts_handler(
+                    if (not self._store_incorrect_login_attempts_handler(
                             username, store_incorrect_attempts_function,
                             store_incorrect_attempts_args)
                             or
-                            self._check_too_many_attempts(
+                            self._check_too_many_login_attempts(
                                 username, pull_incorrect_attempts_function,
                                 pull_incorrect_attempts_args,
                                 locked_info_function, locked_info_args,
                                 locked_hours, incorrect_attempts)):
-                        self._store_lock_time_handler(
+                        self._store_login_lock_time_handler(
                             username, store_locked_time_function,
                             store_locked_time_args)
                     else:

@@ -366,8 +366,8 @@ class BQTools(object):
 
     def store_lock_unlock_times(
             self,
-            username: str,
-            username_col: str,
+            username_or_email: str,
+            username_or_email_col: str,
             locked_time_col: str,
             unlocked_time_col: str,
             lock_or_unlock: str,
@@ -379,9 +379,10 @@ class BQTools(object):
         """
         Stores a lock or unlock time to Google BigQuery.
 
-        :param username: The username to store the lock or unlock time
-            for.
-        :param username_col: The column that holds the username.
+        :param username_or_email: The username or email to store the lock
+            or unlock time for.
+        :param username_or_email_col: The column that holds the username
+            or email.
         :param locked_time_col: The column that holds the locked_times.
         :param unlocked_time_col: The column that holds the
             unlocked_times.
@@ -398,11 +399,11 @@ class BQTools(object):
         """
         # turn the username and time into a dataframe
         if lock_or_unlock == 'lock':
-            store_info = {username_col: [username],
+            store_info = {username_or_email_col: [username_or_email],
                           locked_time_col: [pd.to_datetime('now', utc=True)],
                           unlocked_time_col: [None]}
         elif lock_or_unlock == 'unlock':
-            store_info = {username_col: [username],
+            store_info = {username_or_email_col: [username_or_email],
                           locked_time_col: [None],
                           unlocked_time_col: [pd.to_datetime('now', utc=True)]}
         else:
@@ -430,10 +431,10 @@ class BQTools(object):
         if isinstance(stored_result, str):
             return stored_result
 
-    def store_incorrect_login_times(
+    def store_incorrect_auth_times(
             self,
-            username: str,
-            username_col: str,
+            username_or_email: str,
+            username_or_email_col: str,
             datetime_col: str,
             bq_creds: dict,
             project: str,
@@ -441,11 +442,13 @@ class BQTools(object):
             table_name: str,
             if_exists: str = 'append') -> Union[None, str]:
         """
-        Stores a username and datetime associated with a failed login to
-        Google BigQuery.
+        Stores a username or email and datetime associated with a failed
+        authorization (either login or registering with an authorization
+        code) to Google BigQuery.
 
-        :param username: The username to store.
-        :param username_col: The column that holds the username.
+        :param username_or_email: The username or email to store.
+        :param username_or_email_col: The column that holds the username
+            or email.
         :param datetime_col: The column that holds the datetime.
         :param bq_creds: The credentials to access the BigQuery project.
             These should, at a minimum, have the roles of "BigQuery Data
@@ -458,7 +461,7 @@ class BQTools(object):
         :return: None if successful, error message if not.
         """
         # turn the username and datetime into a dataframe
-        store_info = {username_col: [username],
+        store_info = {username_or_email_col: [username_or_email],
                       datetime_col: [pd.to_datetime('now', utc=True)]}
         df = pd.DataFrame(store_info)
 
@@ -489,12 +492,13 @@ class BQTools(object):
             project: str,
             dataset: str,
             table_name: str,
-            username_col: str,
-            username: str,
+            username_or_email_col: str,
+            username_or_email: str,
             datetime_col: str) -> Tuple[str, Union[pd.Series, None, str]]:
         """
-        Pull a datetimes associated with an incorrect login for a username
-        from BigQuery.
+        Pull a datetimes associated with an incorrect authorization
+        (either login or registering with an authorization code) from
+        BigQuery.
 
         :param bq_creds: The credentials to access the BigQuery project.
             These should, at a minimum, have the roles of "BigQuery Data
@@ -502,12 +506,13 @@ class BQTools(object):
         :param project: The project to pull the data from.
         :param dataset: The dataset to pull the data from.
         :param table_name: The table to pull the data from.
-        :param username_col: The column that holds the usernames.
-        :param username: The username to match.
+        :param username_or_email_col: The column that holds the usernames
+            or emails.
+        :param username_or_email: The username or email to match.
         :param datetime_col: The column that holds the datetimes to pull.
         :return: A tuple with an indicator labeling the result as either
-            'success' or 'error', and the hashed password if successful or
-            the error message if not.
+            'success' or 'error', and the series with the datetimes of
+            incorrect attempts if successful or the error message if not.
         """
         # connect to the database
         client = self._setup_connection(bq_creds)
@@ -517,8 +522,9 @@ class BQTools(object):
 
         # create the query
         table_id = project + "." + dataset + "." + table_name
-        sql_statement = (f"SELECT {datetime_col} FROM {table_id} "
-                         f"WHERE {username_col} = '{username}'")
+        sql_statement = (
+            f"SELECT {datetime_col} FROM {table_id} "
+            f"WHERE {username_or_email_col} = '{username_or_email}'")
 
         # run the query
         query_result = self._run_query(client, sql_statement)
