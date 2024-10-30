@@ -3370,42 +3370,22 @@ class Authenticate(object):
             pull_incorrect_attempts_function. See the docstring for
             login for more information.
         """
-        st.write(
-            "store_unlocked_time_args _check_credentials1",
-            store_unlocked_time_args)
-
         username = st.session_state[username_text_key]
         password = st.session_state[password_text_key]
-
-        st.write(
-            "store_unlocked_time_args _check_credentials2",
-            store_unlocked_time_args)
 
         # make sure the username and password aren't blank
         # and only continue if the username exists in our list
         if self._check_login_info(username, password) and \
                 self._check_username(username):
-            st.write(
-                "store_unlocked_time_args _check_credentials3",
-                store_unlocked_time_args)
             # first see if the account should be locked
-            st.write("username", username)
-            st.write("locked_hours", locked_hours)
-            st.write("locked_info_args", locked_info_args)
             if self._check_locked_account_login(username, locked_info_function,
                                                 locked_info_args, locked_hours):
                 st.session_state.stauth['username'] = None
                 st.session_state.stauth['authentication_status'] = False
             else:
-                st.write(
-                    "store_unlocked_time_args _check_credentials4",
-                    store_unlocked_time_args)
                 # only continue if the password is correct
                 if self._check_pw(password, username, password_pull_function,
                                   password_pull_args):
-                    st.write(
-                        "store_unlocked_time_args _check_credentials5",
-                        store_unlocked_time_args)
                     # note that even with errors storing the data, we
                     # still let the user login, so we clear the errors
                     # first, so that we can record any storage errors and
@@ -3928,10 +3908,6 @@ class Authenticate(object):
                     store_incorrect_attempts_function,
                     pull_incorrect_attempts_function):
             return False
-
-        st.write(
-            "store_unlocked_time_args login",
-            store_unlocked_time_args)
 
         if location == 'main':
             login_form = st.form('Login')
