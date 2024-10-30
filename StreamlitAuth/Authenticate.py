@@ -1036,9 +1036,13 @@ class Authenticate(object):
             datetime.utcnow())
 
         if store_locked_time_function is not None:
+            if store_locked_time_function == 'bigquery':
+                auth_type = 'register_user'
+            else:
+                auth_type = None
             error = self._store_lock_unlock_time(
                 email, store_locked_time_function, store_locked_time_args,
-                'lock')
+                'lock', auth_type)
             self._lock_time_save_error_handler(error, 'register_user')
 
     def _check_preauthorization_code(
@@ -2846,9 +2850,13 @@ class Authenticate(object):
             datetime.utcnow())
 
         if store_unlocked_time_function is not None:
+            if store_locked_time_function == 'bigquery':
+                auth_type = 'login'
+            else:
+                auth_type = None
             error = self._store_lock_unlock_time(
                 username, store_unlocked_time_function,
-                store_unlocked_time_args, 'unlock')
+                store_unlocked_time_args, 'unlock', auth_type)
             self._unlock_time_save_error_handler(error)
 
     def _lock_time_save_error_handler(self, error: str,
@@ -2890,9 +2898,13 @@ class Authenticate(object):
             datetime.utcnow())
 
         if store_locked_time_function is not None:
+            if store_locked_time_function == 'bigquery':
+                auth_type = 'login'
+            else:
+                auth_type = None
             error = self._store_lock_unlock_time(
                 username, store_locked_time_function, store_locked_time_args,
-                'lock')
+                'lock', auth_type)
             self._lock_time_save_error_handler(error, 'login')
 
     def _add_username_or_email_to_args(
