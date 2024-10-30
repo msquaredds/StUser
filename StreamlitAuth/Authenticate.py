@@ -1036,7 +1036,8 @@ class Authenticate(object):
             datetime.utcnow())
 
         if store_locked_time_function is not None:
-            if store_locked_time_function == 'bigquery':
+            if (isinstance(store_locked_time_function, str) and
+                    store_locked_time_function == 'bigquery'):
                 auth_type = 'register_user'
             else:
                 auth_type = None
@@ -2850,7 +2851,8 @@ class Authenticate(object):
             datetime.utcnow())
 
         if store_unlocked_time_function is not None:
-            if store_locked_time_function == 'bigquery':
+            if (isinstance(store_unlocked_time_function, str) and
+                    store_unlocked_time_function == 'bigquery'):
                 auth_type = 'login'
             else:
                 auth_type = None
@@ -2898,7 +2900,8 @@ class Authenticate(object):
             datetime.utcnow())
 
         if store_locked_time_function is not None:
-            if store_locked_time_function == 'bigquery':
+            if (isinstance(store_locked_time_function, str) and
+                    store_locked_time_function == 'bigquery'):
                 auth_type = 'login'
             else:
                 auth_type = None
