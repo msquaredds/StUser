@@ -2795,14 +2795,17 @@ class Authenticate(object):
         :return: None if there is no error, a string error message if
             there is an error.
         """
+        st.write("store_args1", store_args)
         store_args = self._add_username_or_email_to_args(
             username_or_email, store_args)
+        st.write("store_args2", store_args)
         if isinstance(store_function, str):
             if store_function.lower() == 'bigquery':
                 store_args['lock_or_unlock'] = lock_or_unlock
                 # change the column names to match the bigquery table
                 store_args = self._rename_incorrect_attempt_args(store_args,
                                                                  auth_type)
+                st.write("store_args3", store_args)
                 db = BQTools()
                 error = db.store_lock_unlock_times(**store_args)
             else:
@@ -2856,6 +2859,8 @@ class Authenticate(object):
                 auth_type = 'login'
             else:
                 auth_type = None
+            st.write("store_unlocked_time_args _store_unlock_time_handler",
+                     store_unlocked_time_args)
             error = self._store_lock_unlock_time(
                 username, store_unlocked_time_function,
                 store_unlocked_time_args, 'unlock', auth_type)
@@ -3393,6 +3398,9 @@ class Authenticate(object):
                     eh.clear_errors()
                     # if we have a store_unlocked_time_function, store the
                     # unlocked time
+                    st.write(
+                        "store_unlocked_time_args _check_credentials",
+                        store_unlocked_time_args)
                     self._store_unlock_time_handler(
                         username, store_unlocked_time_function,
                         store_unlocked_time_args)
@@ -3908,6 +3916,10 @@ class Authenticate(object):
                     store_incorrect_attempts_function,
                     pull_incorrect_attempts_function):
             return False
+
+        st.write(
+            "store_unlocked_time_args login",
+            store_unlocked_time_args)
 
         if location == 'main':
             login_form = st.form('Login')
