@@ -381,7 +381,7 @@ class Authenticate(object):
                 if key not in save_pull_args:
                     save_pull_args[key] = value
         elif secondary_args is not None:
-            save_pull_args = secondary_args
+            save_pull_args = secondary_args.copy()
 
         if save_pull_function is None and save_pull_args is not None:
             eh.add_dev_error(
@@ -3389,6 +3389,9 @@ class Authenticate(object):
                 "store_unlocked_time_args _check_credentials3",
                 store_unlocked_time_args)
             # first see if the account should be locked
+            st.write("username", username)
+            st.write("locked_hours", locked_hours)
+            st.write("locked_info_args", locked_info_args)
             if self._check_locked_account_login(username, locked_info_function,
                                                 locked_info_args, locked_hours):
                 st.session_state.stauth['username'] = None
