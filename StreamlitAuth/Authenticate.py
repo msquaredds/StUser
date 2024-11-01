@@ -2196,7 +2196,6 @@ class Authenticate(object):
             if not funcs_args_defined:
                 return False
             else:
-                st.write("funcs_and_args", funcs_and_args)
                 (auth_code_pull_function, auth_code_pull_args,
                  locked_info_function, locked_info_args,
                  store_locked_time_function, store_locked_time_args,
@@ -2831,6 +2830,7 @@ class Authenticate(object):
                 store_args = self._rename_incorrect_attempt_args(store_args,
                                                                  auth_type)
                 db = BQTools()
+                st.write("store_args", store_args)
                 error = db.store_lock_unlock_times(**store_args)
             else:
                 error = ("The store_function method is not recognized. The "
