@@ -1165,16 +1165,6 @@ class Authenticate(object):
                 return True
             else:
                 st.write("_check_auth_code failed")
-                st.write("_store_incorrect_auth_code_attempts_handler",
-                         self._store_incorrect_auth_code_attempts_handler(
-                             new_email, store_incorrect_attempts_function,
-                             store_incorrect_attempts_args))
-                st.write("_check_too_many_auth_code_attempts",
-                         self._check_too_many_auth_code_attempts(
-                             new_email,
-                             pull_incorrect_attempts_function,
-                             pull_incorrect_attempts_args,
-                             locked_hours, incorrect_attempts))
                 if (not self._store_incorrect_auth_code_attempts_handler(
                         new_email, store_incorrect_attempts_function,
                         store_incorrect_attempts_args)
