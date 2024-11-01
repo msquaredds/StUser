@@ -1029,6 +1029,74 @@ class Authenticate(object):
                 "Your account is locked. Please try again later.")
             return True
 
+    def _store_lock_time_register_user(
+            self,
+            email: str,
+            store_function: Union[str, Callable],
+            store_args: dict) -> Union[None, str]:
+        """
+        Store the locked or unlocked time associated with the email.
+
+        :param email: The email to store the lock time for.
+        :param store_function: The function to store the locked datetime
+            associated with the email. Thi can be a callable function or a
+            string.
+
+            The function should pull in store_args, which can be used for
+            things like accessing and storing to a database. At a minimum,
+            a callable function should take 'email' as one of the
+            store_args, but can include other arguments as well. A
+            callable function can return an error message as a string,
+            which our error handler will handle.
+
+            The current pre-defined function types are:
+                'bigquery': Stores the locked datetime to a BigQuery
+                    table. This pre-defined version will look for a table
+                    with two columns corresponding to email and
+                    locked_time (see store_args below for how to define
+                    there).
+                    Note that if using 'bigquery' here, in our other
+                    database functions, you should also be using the
+                    'bigquery' option or using your own method that pulls
+                    from a table set up in the same way.
+        :param store_args: Arguments for the store_function. This should
+            not include 'email' since that will automatically be added
+            here. Instead, it should include things like database name,
+            table name, credentials to log into the database, etc.
+
+            If using 'bigquery' as your store_function, the following
+            arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails.
+            locked_time_col (str): The name of the column in the BigQuery
+                table that contains the locked_times.
+
+        :return: None if there is no error, a string error message if
+            there is an error.
+        """
+        store_args = self._add_email_to_args(email, store_args)
+        if isinstance(store_function, str):
+            if store_function.lower() == 'bigquery':
+                db = BQTools()
+                st.write("store_args", store_args)
+                error = db.store_lock_times(**store_args)
+            else:
+                error = ("The store_function method is not recognized. The "
+                         "available options are: 'bigquery' or a callable "
+                         "function.")
+        else:
+            error = store_function(**store_args)
+        return error
+
     def _store_auth_code_lock_time_handler(
             self,
             email: str,
@@ -1057,14 +1125,8 @@ class Authenticate(object):
             datetime.utcnow())
 
         if store_locked_time_function is not None:
-            if (isinstance(store_locked_time_function, str) and
-                    store_locked_time_function == 'bigquery'):
-                auth_type = 'register_user'
-            else:
-                auth_type = None
-            error = self._store_lock_unlock_time(
-                email, store_locked_time_function, store_locked_time_args,
-                'lock', auth_type)
+            error = self._store_lock_time_register_user(
+                email, store_locked_time_function, store_locked_time_args)
             self._lock_time_save_error_handler(error, 'register_user')
 
     def _check_preauthorization_code(
@@ -2747,45 +2809,40 @@ class Authenticate(object):
             return self._password_verification_error_handler(verified)
         return False
 
-    def _store_lock_unlock_time(
+    def _store_lock_unlock_time_login(
             self,
-            username_or_email: str,
+            username: str,
             store_function: Union[str, Callable],
             store_args: dict,
-            lock_or_unlock: str,
-            auth_type: str = None) -> Union[None, str]:
+            lock_or_unlock: str) -> Union[None, str]:
         """
-        Store the locked or unlocked time associated with the username
-        or email.
+        Store the locked or unlocked time associated with the username.
 
-        :param username_or_email: The username or email to store the lock
-            or unlock time for.
-        :param store_unlocked_time_function: The function to store the
-            unlocked datetime associated with the username or email. This \
-            can be a callable function or a string.
+        :param username: The username to store the lock or unlock time
+            for.
+        :param store_function: The function to store the lock or
+            unlocked datetime associated with the username. This can be a
+            callable function or a string.
 
-            The function should pull in store_unlocked_time_args, which
-            can be used for things like accessing and storing to a
-            database. At a minimum, a callable function should take
-            'username_or_email' as one of the store_unlocked_time_args,
-            but can include other arguments as well. A callable function
-            can return an error message as a string, which our error
-            handler will handle.
+            The function should pull in store_args, which can be used for
+            things like accessing and storing to a database. At a minimum,
+            a callable function should take 'username' as one of the
+            store_args, but can include other arguments as well. A
+            callable function can return an error message as a string,
+            which our error handler will handle.
 
             The current pre-defined function types are:
-                'bigquery': Stores the unlocked datetime to a BigQuery
-                    table. This pre-defined version will look for a table
-                    with two columns corresponding to username/email and
-                    locked_time or username/email and unlocked_time (see
-                    store_unlocked_time_args below for how to define
-                    there).
+                'bigquery': Stores the unlocked or locked datetime to a
+                    BigQuery table. This pre-defined version will look for
+                    a table with three columns corresponding to username,
+                    locked_time and unlocked_time (see store_args below
+                    for how to define there).
                     Note that if using 'bigquery' here, in our other
                     database functions, you should also be using the
                     'bigquery' option or using your own method that pulls
                     from a table set up in the same way.
-        :param store_unlocked_time_args: Arguments for the
-            store_unlocked_time_function. This should not include
-            'username_or_email' since that will automatically be added
+        :param store_args: Arguments for the store_function. This should
+            not include 'username' since that will automatically be added
             here. Instead, it should include things like database name,
             table name, credentials to log into the database, etc.
 
@@ -2802,33 +2859,20 @@ class Authenticate(object):
                 dataset.
             username_col (str): The name of the column in the
                 BigQuery table that contains the usernames.
-            OR
-            email_col (str): The name of the column in the BigQuery
-                table that contains the emails. The code will pull the
-                correct version (username_col or email_col) depending on
-                the auth_type variable.
             locked_time_col (str): The name of the column in the BigQuery
                 table that contains the locked_times.
             unlocked_time_col (str): The name of the column in the
                 BigQuery table that contains the unlocked_times.
         :param lock_or_unlock: Whether we are storing a lock or unlock
             time. Literally 'lock' or 'unlock'.
-        :param auth_type: The type of authentication that the incorrect
-            attempt is associated with. This can be 'login' or
-            'register_user'. Only required if
-            store_incorrect_attempts_function is 'bigquery'.
 
         :return: None if there is no error, a string error message if
             there is an error.
         """
-        store_args = self._add_username_or_email_to_args(
-            username_or_email, store_args)
+        store_args = self._add_username_to_args(username, store_args)
         if isinstance(store_function, str):
             if store_function.lower() == 'bigquery':
                 store_args['lock_or_unlock'] = lock_or_unlock
-                # change the column names to match the bigquery table
-                store_args = self._rename_incorrect_attempt_args(store_args,
-                                                                 auth_type)
                 db = BQTools()
                 st.write("store_args", store_args)
                 error = db.store_lock_unlock_times(**store_args)
@@ -2878,14 +2922,9 @@ class Authenticate(object):
             datetime.utcnow())
 
         if store_unlocked_time_function is not None:
-            if (isinstance(store_unlocked_time_function, str) and
-                    store_unlocked_time_function == 'bigquery'):
-                auth_type = 'login'
-            else:
-                auth_type = None
-            error = self._store_lock_unlock_time(
+            error = self._store_lock_unlock_time_login(
                 username, store_unlocked_time_function,
-                store_unlocked_time_args, 'unlock', auth_type)
+                store_unlocked_time_args, 'unlock')
             self._unlock_time_save_error_handler(error)
 
     def _lock_time_save_error_handler(self, error: str,
@@ -2927,14 +2966,9 @@ class Authenticate(object):
             datetime.utcnow())
 
         if store_locked_time_function is not None:
-            if (isinstance(store_locked_time_function, str) and
-                    store_locked_time_function == 'bigquery'):
-                auth_type = 'login'
-            else:
-                auth_type = None
-            error = self._store_lock_unlock_time(
+            error = self._store_lock_unlock_time_login(
                 username, store_locked_time_function, store_locked_time_args,
-                'lock', auth_type)
+                'lock')
             self._lock_time_save_error_handler(error, 'login')
 
     def _add_username_or_email_to_args(

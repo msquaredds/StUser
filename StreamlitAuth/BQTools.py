@@ -71,6 +71,58 @@ class BQTools(object):
         except Exception as e:
             return ('dev_error', f"Error retrieving BigQuery data: {str(e)}")
 
+    def store_lock_times(
+            self,
+            email: str,
+            email_col: str,
+            locked_time_col: str,
+            bq_creds: dict,
+            project: str,
+            dataset: str,
+            table_name: str,
+            if_exists: str = 'append') -> Union[None, str]:
+        """
+        Stores a lock time to Google BigQuery.
+
+        :param email: The email to store the lock time for.
+        :param email_col: The column that holds the email.
+        :param locked_time_col: The column that holds the locked_times.
+        :param bq_creds: The credentials to access the BigQuery project.
+            These should, at a minimum, have the roles of "BigQuery Data
+            Editor", "BigQuery Read Session User" and "BigQuery Job User".
+        :param project: The project to store the data in.
+        :param dataset: The dataset to store the data in.
+        :param table_name: The name of the table to store the data in.
+        :param if_exists: What to do if the table already exists.
+            Can be 'append', 'replace', or 'fail'. Default is 'append'.
+        :return: None if successful, error message if not.
+        """
+        # turn the username and time into a dataframe
+        store_info = {email_col: [email],
+                      locked_time_col: [pd.to_datetime('now', utc=True)]}
+        df = pd.DataFrame(store_info)
+
+        # connect to the database
+        client = self._setup_connection(bq_creds)
+        if isinstance(client, str):
+            # in this case the "client" is an error message
+            return client
+
+        # set up table_id
+        table_id = project + "." + dataset + "." + table_name
+
+        job_config = self._setup_job_config(if_exists)
+
+        # store
+        job_result = self._store_df(client, df, table_id, job_config)
+        if isinstance(job_result, str):
+            return job_result
+
+        # test if we can access the table / double check that it saved
+        stored_result = self._test_data_stored(client, table_id)
+        if isinstance(stored_result, str):
+            return stored_result
+
     def pull_register_user_locked_info_bigquery(
             self,
             bq_creds: dict,
@@ -366,23 +418,22 @@ class BQTools(object):
 
     def store_lock_unlock_times(
             self,
-            username_or_email: str,
-            username_or_email_col: str,
+            username: str,
+            username_col: str,
             locked_time_col: str,
+            unlocked_time_col: str,
             lock_or_unlock: str,
             bq_creds: dict,
             project: str,
             dataset: str,
             table_name: str,
-            unlocked_time_col: str = None,
             if_exists: str = 'append') -> Union[None, str]:
         """
         Stores a lock or unlock time to Google BigQuery.
 
-        :param username_or_email: The username or email to store the lock
-            or unlock time for.
-        :param username_or_email_col: The column that holds the username
-            or email.
+        :param username: The username to store the lock or unlock time
+            for.
+        :param username_col: The column that holds the username.
         :param locked_time_col: The column that holds the locked_times.
         :param unlocked_time_col: The column that holds the
             unlocked_times.
@@ -399,11 +450,11 @@ class BQTools(object):
         """
         # turn the username and time into a dataframe
         if lock_or_unlock == 'lock':
-            store_info = {username_or_email_col: [username_or_email],
+            store_info = {username_col: [username],
                           locked_time_col: [pd.to_datetime('now', utc=True)],
                           unlocked_time_col: [None]}
         elif lock_or_unlock == 'unlock':
-            store_info = {username_or_email_col: [username_or_email],
+            store_info = {username_col: [username],
                           locked_time_col: [None],
                           unlocked_time_col: [pd.to_datetime('now', utc=True)]}
         else:
