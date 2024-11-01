@@ -194,36 +194,57 @@ class Authenticate(object):
             'bigquery': ['bq_creds', 'project', 'dataset']}
         self.save_pull_args_function_specific = {
             'bigquery': {
-                'cred_save_args': ['table_name'],
-                'password_pull_args':
-                    ['table_name', 'username_col', 'password_col'],
-                'all_locked_args':
-                    ['table_name', 'username_col', 'locked_time_col',
-                     'unlocked_time_col'],
-                'locked_info_args':
-                    ['table_name', 'username_col', 'locked_time_col',
-                     'unlocked_time_col'],
-                'store_locked_time_args':
-                    ['table_name', 'username_col', 'locked_time_col',
-                     'unlocked_time_col'],
-                'store_unlocked_time_args':
-                    ['table_name', 'username_col', 'locked_time_col',
-                     'unlocked_time_col'],
-                'all_incorrect_attempts_args':
-                    ['table_name', 'username_col', 'datetime_col'],
-                'store_incorrect_attempts_args':
-                    ['table_name', 'username_col', 'datetime_col'],
-                'pull_incorrect_attempts_args':
-                    ['table_name', 'username_col', 'datetime_col'],
-                'username_pull_args':
-                    ['table_name', 'username_col', 'email_col'],
-                'password_store_args':
-                    ['table_name', 'username_col', 'password_col',
-                     'datetime_col'],
-                'info_pull_args':
-                    ['table_name', 'col_map'],
-                'info_store_args':
-                    ['table_name', 'col_map']}}
+                'register_user': {
+                    'auth_code_pull_args':
+                        ['table_name', 'email_col', 'auth_code_col'],
+                    'all_locked_args':
+                        ['table_name', 'email_col', 'locked_time_col'],
+                    'locked_info_args':
+                        ['table_name', 'email_col', 'locked_time_col'],
+                    'store_locked_time_args':
+                        ['table_name', 'email_col', 'locked_time_col'],
+                    'all_incorrect_attempts_args':
+                        ['table_name', 'email_col', 'datetime_col'],
+                    'store_incorrect_attempts_args':
+                        ['table_name', 'email_col', 'datetime_col'],
+                    'pull_incorrect_attempts_args':
+                        ['table_name', 'email_col', 'datetime_col'],
+                    'cred_save_args': ['table_name']},
+                'login': {
+                    'password_pull_args':
+                        ['table_name', 'username_col', 'password_col'],
+                    'all_locked_args':
+                        ['table_name', 'username_col', 'locked_time_col',
+                         'unlocked_time_col'],
+                    'locked_info_args':
+                        ['table_name', 'username_col', 'locked_time_col',
+                         'unlocked_time_col'],
+                    'store_locked_time_args':
+                        ['table_name', 'username_col', 'locked_time_col',
+                         'unlocked_time_col'],
+                    'store_unlocked_time_args':
+                        ['table_name', 'username_col', 'locked_time_col',
+                         'unlocked_time_col'],
+                    'all_incorrect_attempts_args':
+                        ['table_name', 'username_col', 'datetime_col'],
+                    'store_incorrect_attempts_args':
+                        ['table_name', 'username_col', 'datetime_col'],
+                    'pull_incorrect_attempts_args':
+                        ['table_name', 'username_col', 'datetime_col']},
+                'forgot_username': {
+                    'username_pull_args':
+                        ['table_name', 'username_col', 'email_col']},
+                'forgot_password': {
+                    'username_pull_args':
+                        ['table_name', 'username_col', 'email_col'],
+                    'password_store_args':
+                        ['table_name', 'username_col', 'password_col',
+                         'datetime_col']},
+                'update_user_info': {
+                    'info_pull_args':
+                        ['table_name', 'col_map'],
+                    'info_store_args':
+                        ['table_name', 'col_map']}}}
 
         if not self._check_class_save_pull():
             raise ValueError()
@@ -401,7 +422,7 @@ class Authenticate(object):
                 save_pull_function].copy()
             if save_pull_function in self.save_pull_args_function_specific:
                 args_to_check.extend(self.save_pull_args_function_specific[
-                    save_pull_function][target_args_name])
+                    save_pull_function][form][target_args_name])
 
             if (save_pull_args is None or
                     set(args_to_check) != set(save_pull_args.keys())):
