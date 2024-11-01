@@ -720,7 +720,7 @@ class Authenticate(object):
             latest_lock_datetime if the data was pulled successfully,
             and None if there was an error.
         """
-        # add the username to the arguments for the locked info
+        # add the email to the arguments for the locked info
         locked_info_args = self._add_email_to_args(
             email, locked_info_args)
         if isinstance(locked_info_function, str):
@@ -993,7 +993,7 @@ class Authenticate(object):
         # are using for this purpose
         if pull_incorrect_attempts_function is not None:
             attempts_pull_worked, attempts = self._pull_incorrect_attempts(
-                username, 'register_user',
+                email, 'register_user',
                 pull_incorrect_attempts_function, pull_incorrect_attempts_args)
         else:
             # if not, just use the session_state
@@ -1049,7 +1049,7 @@ class Authenticate(object):
         """
         if 'register_user_lock' not in st.session_state.stauth:
             st.session_state.stauth['register_user_lock'] = {}
-        if username not in st.session_state.stauth[
+        if email not in st.session_state.stauth[
             'register_user_lock'].keys():
             st.session_state.stauth['register_user_lock'][email] = []
         # append the current datetime
