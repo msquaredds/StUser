@@ -369,12 +369,12 @@ class BQTools(object):
             username_or_email: str,
             username_or_email_col: str,
             locked_time_col: str,
-            unlocked_time_col: str,
             lock_or_unlock: str,
             bq_creds: dict,
             project: str,
             dataset: str,
             table_name: str,
+            unlocked_time_col: str = None,
             if_exists: str = 'append') -> Union[None, str]:
         """
         Stores a lock or unlock time to Google BigQuery.
