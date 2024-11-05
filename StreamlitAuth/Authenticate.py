@@ -1087,7 +1087,6 @@ class Authenticate(object):
         if isinstance(store_function, str):
             if store_function.lower() == 'bigquery':
                 db = BQTools()
-                st.write("store_args", store_args)
                 error = db.store_lock_times(**store_args)
             else:
                 error = ("The store_function method is not recognized. The "
@@ -1214,19 +1213,15 @@ class Authenticate(object):
         if self._check_locked_account_register_user(
                 new_email, locked_info_function, locked_info_args,
                 locked_hours):
-            st.write("_check_locked_account_register_user returned True")
             return False
         else:
-            st.write("_check_locked_account_register_user returned False")
             # only continue if the authorization code is correct
             if self._check_auth_code(auth_code,
                                      new_email,
                                      auth_code_pull_function,
                                      auth_code_pull_args):
-                st.write("_check_auth_code passed")
                 return True
             else:
-                st.write("_check_auth_code failed")
                 if (not self._store_incorrect_auth_code_attempts_handler(
                         new_email, store_incorrect_attempts_function,
                         store_incorrect_attempts_args)
@@ -1236,7 +1231,6 @@ class Authenticate(object):
                             pull_incorrect_attempts_function,
                             pull_incorrect_attempts_args,
                             locked_hours, incorrect_attempts)):
-                    st.write("too many attempts")
                     self._store_auth_code_lock_time_handler(
                         new_email, store_locked_time_function,
                         store_locked_time_args)
@@ -1608,9 +1602,7 @@ class Authenticate(object):
         if self._check_register_user_info(
                 new_email, new_username, new_password, new_password_repeat,
                 preauthorization):
-            st.write("_check_register_user_info passed")
             if preauthorization:
-                st.write("preauthorization required")
                 creds_verified = self._check_preauthorization_code(
                     new_email, auth_code, auth_code_pull_function,
                     auth_code_pull_args, incorrect_attempts, locked_hours,
@@ -2874,7 +2866,6 @@ class Authenticate(object):
             if store_function.lower() == 'bigquery':
                 store_args['lock_or_unlock'] = lock_or_unlock
                 db = BQTools()
-                st.write("store_args", store_args)
                 error = db.store_lock_unlock_times(**store_args)
             else:
                 error = ("The store_function method is not recognized. The "
