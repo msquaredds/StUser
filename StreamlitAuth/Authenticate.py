@@ -342,6 +342,21 @@ class Authenticate(object):
             email_creds = self.email_creds
         return email_user, email_inputs, email_creds
 
+    def _check_email_exists(
+            self,
+            email_user: Union[Callable, str],
+            email_inputs: dict) -> bool:
+        """When requiring an email for verification, check that the email
+            exists and the inputs are correct."""
+        if email_user is None or 'verification_url' not in email_inputs:
+            eh.add_dev_error(
+                'register_user',
+                "email_user must be defined to verify the email "
+                "since verify_email was set to True and the "
+                "'verification_url' must exist in email_inputs.")
+            return False
+        return True
+
     def _define_save_pull_vars(
             self,
             form: str,
@@ -1237,7 +1252,8 @@ class Authenticate(object):
                 return False
 
     def _register_credentials(self, username: str, password: str,
-                              email: str, preauthorization: bool) -> None:
+                              email: str, preauthorization: bool,
+                              email_code: str = None) -> None:
         """
         Adds to credentials dictionary the new user's information.
 
@@ -1247,6 +1263,8 @@ class Authenticate(object):
         :param preauthorization: The preauthorization requirement.
             True: user must be preauthorized to register.
             False: any user can register.
+        :param verify_email: If we want to validate the user's email, the
+            email_code should be supplied here.
         """
         # we want to add our new username and email to the session state,
         # so they can't be accidentally registered again
@@ -1256,11 +1274,22 @@ class Authenticate(object):
         # hash password
         password = Hasher([password]).generate()[0]
 
-        # store the credentials
-        st.session_state[self.user_credentials_session_state] = {
-            'username': username,
-            'email': email,
-            'password': password}
+        if email_code is not None:
+            # hash for storage
+            hashed_email_code = Hasher([email_code]).generate()[0]
+            # store the credentials
+            st.session_state[self.user_credentials_session_state] = {
+                'username': username,
+                'email': email,
+                'password': password,
+                'email_code': hashed_email_code,
+                'email_verified': 0}
+        else:
+            # store the credentials
+            st.session_state[self.user_credentials_session_state] = {
+                'username': username,
+                'email': email,
+                'password': password}
 
         # if we had the name preauthorized, remove it from that list
         if preauthorization:
@@ -1318,14 +1347,29 @@ class Authenticate(object):
 
     def _get_message_body(self, message_type: str, website_name: str,
                           username: str = None, website_email: str = None,
-                          password: str = None, info_type: str = None) -> str:
+                          password: str = None, info_type: str = None,
+                          verification_url: str = None,
+                          email_code: str = None) -> str:
         if message_type == 'register_user':
             message_body = \
                 (f"""Thank you for registering for {website_name}!\n\n
                  You have successfully registered with the username: 
-                 {username}.\n\n
-                 If you did not register or you have any questions,
-                 please contact us at {website_email}.""")
+                 {username}.\n\n""")
+            if verification_url is not None:
+                # see if there are any ? already in the url, meaning there
+                # are already query params in the url
+                if '?' in verification_url:
+                    url_with_params = verification_url + (f"&email_code"
+                                                          f"={email_code}")
+                else:
+                    url_with_params = verification_url + (f"?email_code"
+                                                          f"={email_code}")
+                message_body = message_body + \
+                    (f"""Please click the following link to verify your email:
+                     {url_with_params}\n\n""")
+            message_body = message_body + \
+                (f"""If you did not register or you have any questions, 
+                please contact us at {website_email}.""")
         elif message_type == 'forgot_username':
             message_body = \
                 (f"""You requested your username for {website_name}.\n\n
@@ -1362,7 +1406,8 @@ class Authenticate(object):
         return True
 
     def _check_email_inputs(self, website_name: str = None,
-                            website_email: str = None) -> bool:
+                            website_email: str = None,
+                            verification_url: str = None) -> bool:
         """
         Check on whether the inputs for emails exist and are the correct
         type.
@@ -1380,6 +1425,11 @@ class Authenticate(object):
             eh.add_dev_error(
                 'register_user',
                 "website_email is not a valid format.")
+            return False
+        if not isinstance(verification_url, str):
+            eh.add_dev_error(
+                'register_user',
+                "verification_url must be a string.")
             return False
         return True
 
@@ -1399,7 +1449,8 @@ class Authenticate(object):
             self, message_type: str, email_inputs: dict,
             user_email: str, email_user: Union[callable, str],
             email_creds: dict = None,  username: str = None,
-            password: str = None, info_type: str = None) -> None:
+            password: str = None, info_type: str = None,
+            email_code: str = None) -> None:
         """
         Send an email to the user. Can be used for user registration,
         a forgotten username or password, or a user info update (updating
@@ -1415,6 +1466,11 @@ class Authenticate(object):
                 registration is happening.
             website_email (str) : The email that is sending the
                 registration confirmation.
+            verification_url (str): The base email for verification, not
+                including the verification code parameter. Required if
+                verifying the email. For example, it could be something
+                like 'www.verifymyemail.com/'. We will add the
+                verification code based on
         :param user_email: The user's email.
         :param email_user: Provide the function (callable) or method (str)
             for email here.
@@ -1438,15 +1494,22 @@ class Authenticate(object):
             message_type is 'forgot_password'.
         :param info_type: The type of information being updated. Only
             necessary if message_type is 'update_user_info'.
+        :param email_code: The email verification code. Only necessary if
+            message_type is 'register_user' and we want to verify the
+            user's email (verify_email is True in register_user method).
         """
         if (self._check_email_inputs(**email_inputs) and
                 self._check_email_type(message_type)):
             subject = self._get_message_subject(
                 message_type, email_inputs['website_name'])
+            if email_code is None:
+                email_inputs['verification_url'] = None
             body = self._get_message_body(
                 message_type, email_inputs['website_name'], username,
-                email_inputs['website_email'], password, info_type)
-            email_handler = Email(user_email, subject, body, **email_inputs)
+                email_inputs['website_email'], password, info_type,
+                email_inputs['verification_url'], email_code)
+            email_handler = Email(user_email, subject, body,
+                                  email_inputs['website_email'])
             if isinstance(email_user, str):
                 if email_user.lower() == 'gmail':
                     creds = email_handler.get_gmail_oauth2_credentials(
@@ -1472,6 +1535,7 @@ class Authenticate(object):
             repeat_password_text_key: str,
             auth_code_key: str,
             preauthorization: bool,
+            verify_email: bool,
             email_user: Union[callable, str] = None,
             email_inputs: dict = None,
             email_creds: dict = None,
@@ -1507,6 +1571,13 @@ class Authenticate(object):
         :param preauthorization: The preauthorization requirement.
             True: user must be preauthorized to register.
             False: any user can register.
+        :param verify_email: If True, the user must verify their email
+            so we will create a random verification code. If saving the
+            credentials, it can save there, as well as an indicator that
+            the email is not yet verified.The user must also be emailed in
+            this case and the email will contain a URL with the
+            verification code as a parameter. Then you can verify this
+            parameter using the verify_email method in Verification.
         :param email_user: If we want to email the user after registering,
             provide the function (callable) or method (str) for email
             here.  See the docstring for register_user for more
@@ -1616,8 +1687,15 @@ class Authenticate(object):
                 creds_verified = True
 
             if creds_verified:
+                if verify_email:
+                    validator = Validator()
+                    email_code = validator.generate_random_password(
+                        self.weak_passwords)
+                else:
+                    email_code = None
                 self._register_credentials(
-                    new_username, new_password, new_email, preauthorization)
+                    new_username, new_password, new_email, preauthorization,
+                    email_code)
                 # we can either try to save credentials and email, save
                 # credentials and not email, just email, or none of the
                 # above
@@ -1629,13 +1707,13 @@ class Authenticate(object):
                             self._send_user_email(
                                 'register_user', email_inputs,
                                 new_email, email_user, email_creds,
-                                new_username)
+                                new_username, email_code)
                         else:
                             eh.clear_errors()
                 elif email_user is not None:
                     self._send_user_email(
                         'register_user', email_inputs, new_email,
-                        email_user, email_creds, new_username)
+                        email_user, email_creds, new_username, email_code)
                 else:
                     # get rid of any errors, since we have successfully
                     # registered
@@ -1645,6 +1723,7 @@ class Authenticate(object):
             self,
             location: str = 'main',
             preauthorization: bool = False,
+            verify_email: bool = False,
             email_text_key: str = 'register_user_email',
             username_text_key: str = 'register_user_username',
             password_text_key: str = 'register_user_password',
@@ -1681,6 +1760,13 @@ class Authenticate(object):
         :param preauthorization: The preauthorization requirement.
             True: user must be preauthorized to register.
             False: any user can register.
+        :param verify_email: If True, the user must verify their email
+            so we will create a random verification code. If saving the
+            credentials, it can save there, as well as an indicator that
+            the email is not yet verified.The user must also be emailed in
+            this case and the email will contain a URL with the
+            verification code as a parameter. Then you can verify this
+            parameter using the verify_email method in Verification.
         :param email_text_key: The key for the email text input on the
             registration form. We attempt to default to a unique key, but
             you can put your own in here if you want to customize it or
@@ -1711,7 +1797,8 @@ class Authenticate(object):
             email_user was not defined in the class instantiation. If we
             defined the email method in the class instantiation and we
             provide another here, the one here will override the one in
-            the class instantiation.
+            the class instantiation. This is required if we set
+            verify_email to True.
 
             The current pre-defined function types are:
 
@@ -1736,6 +1823,11 @@ class Authenticate(object):
                 registration is happening.
             website_email (str) : The email that is sending the
                 registration confirmation.
+            verification_url (str): The base email for verification, not
+                including the verification code parameter. Required if
+                verify_email is True. For example, it could be something
+                like 'www.verifymyemail.com/'. We will add the
+                verification code.
         :param email_creds: The credentials to use for the email API. Only
             necessary if email_user is not None.
 
@@ -2224,6 +2316,10 @@ class Authenticate(object):
         # set the email variables
         email_user, email_inputs, email_creds = self._define_email_vars(
             email_user, email_inputs, email_creds)
+        if verify_email is True:
+            email_exists = self._check_email_exists(email_user, email_inputs)
+            if not email_exists:
+                return False
         # set the credential saving variables
         cred_save_function, cred_save_args = self._define_save_pull_vars(
             'register_user', 'cred_save_args',
@@ -2290,6 +2386,7 @@ class Authenticate(object):
             'Register', on_click=self._check_and_register_user,
             args=(email_text_key, username_text_key, password_text_key,
                   repeat_password_text_key, auth_code_key, preauthorization,
+                  verify_email,
                   email_user, email_inputs, email_creds,
                   cred_save_function, cred_save_args,
                   auth_code_pull_function, auth_code_pull_args,

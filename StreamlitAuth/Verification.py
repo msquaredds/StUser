@@ -112,7 +112,8 @@ class Verification(object):
                     f"If you did not request this code or your code is not "
                     f"working as expected, please contact us immediately at "
                     f"{email_inputs['website_email']}.")
-            email_handler = Email(email, subject, body, **email_inputs)
+            email_handler = Email(email, subject, body,
+                                  email_inputs['website_email'])
             if isinstance(email_user, str):
                 if email_user.lower() == 'gmail':
                     creds = email_handler.get_gmail_oauth2_credentials(
