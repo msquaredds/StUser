@@ -254,7 +254,7 @@ class Authenticate(object):
 
         self.email_function_options = ['sendgrid']
         self.email_input_options = {
-            'sendgrid': ['website_name', 'website_name']}
+            'sendgrid': ['website_name', 'website_email']}
         self.email_input_function_specific = {
             'sendgrid': {
                 'register_user': ['verification_url']}}
