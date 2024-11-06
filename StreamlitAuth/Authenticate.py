@@ -101,6 +101,12 @@ class Authenticate(object):
                 registration is happening.
             website_email (str) : The email that is sending the
                 registration confirmation.
+
+                Note that additional arguments will be specified in the
+                individual methods below, such as the verification URL.
+                You can also specify any of these arguments in the
+                individual methods below, and they will override the ones
+                specified here.
         :param email_creds: The credentials to use for the email API. Only
             necessary if email_user is not None.
 
@@ -1426,7 +1432,8 @@ class Authenticate(object):
                 'register_user',
                 "website_email is not a valid format.")
             return False
-        if not isinstance(verification_url, str):
+        if (verification_url is not None and
+                not isinstance(verification_url, str)):
             eh.add_dev_error(
                 'register_user',
                 "verification_url must be a string.")
