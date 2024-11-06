@@ -1820,13 +1820,14 @@ class Authenticate(object):
                             self._send_user_email(
                                 'register_user', email_inputs,
                                 new_email, email_user, email_creds,
-                                new_username, email_code)
+                                new_username, email_code=email_code)
                         else:
                             eh.clear_errors()
                 elif email_user is not None:
                     self._send_user_email(
                         'register_user', email_inputs, new_email,
-                        email_user, email_creds, new_username, email_code)
+                        email_user, email_creds, new_username,
+                        email_code=email_code)
                 else:
                     # get rid of any errors, since we have successfully
                     # registered
