@@ -252,6 +252,13 @@ class Authenticate(object):
                     'info_store_args':
                         ['table_name', 'col_map']}}}
 
+        self.email_function_options = ['sendgrid']
+        self.email_input_options = {
+            'sendgrid': ['website_name', 'website_name']}
+        self.email_input_function_specific = {
+            'sendgrid': {
+                'register_user': ['verification_url']}}
+
         if not self._check_class_save_pull():
             raise ValueError()
 
@@ -328,38 +335,6 @@ class Authenticate(object):
             eh.add_dev_error(
                 form,
                 "location argument must be one of 'main' or 'sidebar'")
-            return False
-        return True
-
-    def _define_email_vars(
-            self,
-            email_user: Union[Callable, str],
-            email_inputs: dict,
-            email_creds: dict) -> Tuple[Union[Callable, str], dict, dict]:
-        """
-        For methods with emailing, define the email variables as either
-        the class email variables or the ones passed in the method.
-        """
-        if email_user is None and self.email_user is not None:
-            email_user = self.email_user
-        if email_inputs is None and self.email_inputs is not None:
-            email_inputs = self.email_inputs
-        if email_creds is None and self.email_creds is not None:
-            email_creds = self.email_creds
-        return email_user, email_inputs, email_creds
-
-    def _check_email_exists(
-            self,
-            email_user: Union[Callable, str],
-            email_inputs: dict) -> bool:
-        """When requiring an email for verification, check that the email
-            exists and the inputs are correct."""
-        if email_user is None or 'verification_url' not in email_inputs:
-            eh.add_dev_error(
-                'register_user',
-                "email_user must be defined to verify the email "
-                "since verify_email was set to True and the "
-                "'verification_url' must exist in email_inputs.")
             return False
         return True
 
@@ -457,6 +432,127 @@ class Authenticate(object):
                 return False, None
 
         return save_pull_function, save_pull_args
+
+    def _define_email_vars(
+            self,
+            form: str,
+            email_function: Union[Callable, str] = None,
+            email_inputs: dict = None,
+            email_creds: dict = None,
+            secondary_function: Union[Callable, str] = None,
+            secondary_inputs: dict = None,
+            secondary_creds: dict = None,
+            check_inputs: bool = False) -> Tuple[Union[Callable, str], dict,
+    dict]:
+        """
+        Define the email variables as either the class email_inputs
+        variables or the ones passed in the method with the method
+        variables having preference. Can also compare against a secondary
+        function/args instead of the class.
+
+        We also check that the set of arguments is correct for the
+        function being used, as long as the function is a predefined one.
+
+        :param form: The name of the form that this function is being
+            called from. Used for error messages.
+        :param email_function: The email function to use, being passed in
+            from the method.
+        :param email_inputs: The email arguments to use, being passed in
+            from the method.
+        :param email_creds: The email credentials to use, being passed in
+            from the method.
+        :param secondary_function: The email function to compare
+            against and be used if the email_function is None.
+        :param secondary_inputs: The email inputs to compare
+            against and be used if the email_inputs is None. If
+            email_inputs is not None but secondary_inputs has additional
+            arguments, those arguments will be added to email_inputs.
+        :param secondary_creds: The email credentials to compare
+            against and be used if the email_creds is None.
+        :param check_inputs: Whether to check the inputs against the
+            expected inputs for the given function. This is useful if you
+            have a three-level hierarchy and you define something at the
+            first level and third level. You might not want to check the
+            second level since some of the arguments are defined at the
+            third level.
+        :return email_function: The email function to use. Or False if the
+            inputs are incorrect.
+        :return email_inputs: The email inputs to use. Or None if the
+            inputs are incorrect.
+        :return email_creds: The email credentials to use. Or None if the
+            inputs are incorrect.
+        """
+        if secondary_function is None:
+            secondary_function = self.email_user
+        if secondary_inputs is None:
+            if self.email_inputs is not None:
+                secondary_inputs = self.email_inputs.copy()
+            else:
+                secondary_inputs = None
+        if secondary_creds is None:
+            secondary_creds = self.email_creds.copy()
+
+        if email_function is None and secondary_function is not None:
+            email_function = secondary_function
+        if email_inputs is not None and secondary_inputs is not None:
+            for key, value in secondary_inputs.items():
+                if key not in email_inputs:
+                    email_inputs[key] = value
+        elif secondary_inputs is not None:
+            email_inputs = secondary_inputs.copy()
+        if email_creds is None and secondary_creds is not None:
+            email_creds = secondary_creds
+
+        # either email function, email inputs and email creds must all be
+        # None or all be defined, check that here
+        if (not all([x is None for x in
+                     [email_function, email_inputs, email_creds]])
+                or not all([x is not None for x in
+                            [email_function, email_inputs, email_creds]])):
+            eh.add_dev_error(
+                form,
+                f"for form {form}, either email_function, email_inputs "
+                f"and email_creds must all be None or all be defined")
+            return False, None, None
+
+        # check the email_inputs since this could be a confusing spot
+        # as we are potentially defining args both in the class
+        # instantiation and in the method
+        if (check_inputs and
+                email_function is not None and
+                isinstance(email_function, str) and
+                email_function in self.email_function_options):
+            inputs_to_check = self.email_input_options[email_function].copy()
+            if email_function in self.email_input_function_specific:
+                inputs_to_check.extend(self.email_input_function_specific[
+                    email_function][form])
+
+            if (email_inputs is None or
+                    set(inputs_to_check) != set(email_inputs.keys())):
+                eh.add_dev_error(
+                    form,
+                    f"email_inputs for the form {form} must include the "
+                    f"keys {inputs_to_check} and only those keys "
+                    f"(either defined in the function or partially defined "
+                    f"at the class level and partially in the function)")
+                return False, None, None
+
+        return email_function, email_inputs, email_creds
+
+    def _check_email_exists(
+            self,
+            email_user: Union[Callable, str],
+            email_inputs: dict) -> bool:
+        """When requiring an email for verification, check that the email
+            exists and the inputs are correct."""
+        if email_user is None or 'verification_url' not in email_inputs:
+            eh.add_dev_error(
+                'register_user',
+                "email_user must be defined to verify the email "
+                "since verify_email was set to True and the "
+                "'verification_url' must exist in email_inputs.")
+            return False
+        return True
 
     def _define_register_user_functions_args(
             self,
@@ -1351,7 +1447,23 @@ class Authenticate(object):
         elif message_type == 'update_user_info':
             return f"""{website_name}: Account Information Update"""
 
-    def _get_message_body(self, message_type: str, website_name: str,
+    def _create_full_verification_url(self,
+                                      verification_url: str,
+                                      email_code: str) -> str:
+        """Add the code to the verification url."""
+        # see if there are any ? already in the url, meaning there
+        # are already query params in the url
+        if '?' in verification_url:
+            url_with_params = verification_url + f"&email_code={email_code}"
+        else:
+            # if verification_url does not end with "/" add it
+            if verification_url[-1] != "/":
+                verification_url = verification_url + "/"
+            url_with_params = verification_url + f"?email_code={email_code}"
+        return url_with_params
+
+    def _get_message_body(self,
+                          message_type: str, website_name: str,
                           username: str = None, website_email: str = None,
                           password: str = None, info_type: str = None,
                           verification_url: str = None,
@@ -1362,14 +1474,8 @@ class Authenticate(object):
                  You have successfully registered with the username: 
                  {username}.\n\n""")
             if verification_url is not None:
-                # see if there are any ? already in the url, meaning there
-                # are already query params in the url
-                if '?' in verification_url:
-                    url_with_params = verification_url + (f"&email_code"
-                                                          f"={email_code}")
-                else:
-                    url_with_params = verification_url + (f"?email_code"
-                                                          f"={email_code}")
+                url_with_params = self._create_full_verification_url(
+                    verification_url, email_code)
                 message_body = message_body + \
                     (f"""Please click the following link to verify your email:
                      {url_with_params}\n\n""")
@@ -2321,12 +2427,16 @@ class Authenticate(object):
             return False
 
         # set the email variables
-        email_user, email_inputs, email_creds = self._define_email_vars(
-            email_user, email_inputs, email_creds)
         if verify_email is True:
-            email_exists = self._check_email_exists(email_user, email_inputs)
-            if not email_exists:
-                return False
+            check_inputs = True
+        else:
+            check_inputs = False
+        email_user, email_inputs, email_creds = self._define_email_vars(
+            'register_user', email_user, email_inputs, email_creds,
+            check_inputs=check_inputs)
+        # this will return false for email_user if there was an error
+        if not email_user:
+            return False
         # set the credential saving variables
         cred_save_function, cred_save_args = self._define_save_pull_vars(
             'register_user', 'cred_save_args',
@@ -4427,7 +4537,10 @@ class Authenticate(object):
 
         # set the email variables
         email_user, email_inputs, email_creds = self._define_email_vars(
-            email_user, email_inputs, email_creds)
+            'forgot_username', email_user, email_inputs, email_creds)
+        # this will return false for email_user if there was an error
+        if not email_user:
+            return False
         # set the username pull variables
         username_pull_function, username_pull_args = (
             self._define_save_pull_vars(
@@ -4809,7 +4922,10 @@ class Authenticate(object):
 
         # set the email variables
         email_user, email_inputs, email_creds = self._define_email_vars(
-            email_user, email_inputs, email_creds)
+            'forgot_password', email_user, email_inputs, email_creds)
+        # this will return false for email_user if there was an error
+        if not email_user:
+            return False
         # set the username pull variables
         username_pull_function, username_pull_args = (
             self._define_save_pull_vars(
@@ -5525,7 +5641,10 @@ class Authenticate(object):
 
         # set the email variables
         email_user, email_inputs, email_creds = self._define_email_vars(
-            email_user, email_inputs, email_creds)
+            'update_user_info', email_user, email_inputs, email_creds)
+        # this will return false for email_user if there was an error
+        if not email_user:
+            return False
         # set the info pull variables
         info_pull_function, info_pull_args = (
             self._define_save_pull_vars(
