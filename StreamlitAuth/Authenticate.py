@@ -503,6 +503,18 @@ class Authenticate(object):
         if email_creds is None and secondary_creds is not None:
             email_creds = secondary_creds
 
+        st.write("email_function", email_function)
+        st.write("email_inputs", email_inputs)
+        st.write("email_creds", email_creds)
+        st.write([x is None for x in
+                     [email_function, email_inputs, email_creds]])
+        st.write(all([x is None for x in
+                     [email_function, email_inputs, email_creds]]))
+        st.write([x is not None for x in
+                            [email_function, email_inputs, email_creds]])
+        st.write(all([x is not None for x in
+                            [email_function, email_inputs, email_creds]]))
+
         # either email function, email inputs and email creds must all be
         # None or all be defined, check that here
         if (not all([x is None for x in
