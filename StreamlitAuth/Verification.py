@@ -531,8 +531,8 @@ class Verification(object):
             email_address = st.query_params['email_address']
             email_code = st.query_params['email_code']
         except KeyError:
-            raise ValueError("The email_address or email_code parameter is "
-                             "missing.")
+            raise KeyError("The email_address or email_code parameter is "
+                           "missing.")
 
         # check the code
         if self._check_email_code(
