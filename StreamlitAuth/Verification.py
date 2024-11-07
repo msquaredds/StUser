@@ -269,3 +269,281 @@ class Verification(object):
         elif email_function is not None:
             self._send_user_email(
                 auth_codes, email_inputs, email_function, email_creds)
+
+    def _add_email_to_args(
+            self, email: str, existing_args: dict) -> dict:
+        """Add the email to existing_args."""
+        if existing_args is None:
+            existing_args = {}
+        existing_args['email'] = email
+        return existing_args
+
+    def _rename_email_code_pull_args(self, email_code_pull_args: dict) -> dict:
+        """Update the target and reference columns and reference value."""
+        email_code_pull_args['reference_col'] = email_code_pull_args[
+            'email_col']
+        email_code_pull_args['reference_value'] = email_code_pull_args[
+            'email']
+        email_code_pull_args['target_col'] = email_code_pull_args[
+            'email_code_col']
+        del email_code_pull_args['email_col']
+        del email_code_pull_args['email']
+        del email_code_pull_args['email_code_col']
+        return email_code_pull_args
+
+    def _check_email_code(
+            self,
+            email_address: str,
+            email_code: str,
+            email_code_pull_function: Union[str, Callable],
+            email_code_pull_args: dict = None) -> bool:
+        """
+        Pulls the expected email code and checks the validity of the input
+        email code.
+
+        :param email_address: The pulled email address.
+        :param email_code: The pulled email code.
+        :param email_code_pull_function: The function to pull the hashed
+            email code associated with the email. This can be a
+            callable function or a string.
+
+            At a minimum, a callable function should take 'email_address'
+            as an argument, but can include other arguments as well.
+            A callable function should return:
+             - A tuple of an indicator and a value
+             - The indicator should be either 'dev_error', 'user_error'
+                or 'success'.
+             - The value should be a string that contains the error
+                message when the indicator is 'dev_error', None when the
+                indicator is 'user_error', and the hashed email
+                code when the indicator is 'success'. It is None with
+                'user_error' since we will handle that in the calling
+                function and create a user_error that tells the user that
+                the email or authorization code is incorrect.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls the email code from a BigQuery table.
+        :param email_code_pull_args: Arguments for the
+            email_code_pull_function. This should not include
+            'email_address' since that will automatically be added here
+            based on the input.
+
+            If using 'bigquery' as your email_code_pull_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails.
+            email_code_col (str): The name of the column in the BigQuery
+                table that contains the email codes.
+        """
+        # add the email to the arguments for the email code pull function
+        email_code_pull_args = self._add_email_to_args(
+            email_address, email_code_pull_args)
+        # pull the email code
+        if isinstance(email_code_pull_function, str):
+            if email_code_pull_function.lower() == 'bigquery':
+                email_code_pull_args = self._rename_auth_code_pull_args(
+                    email_code_pull_args)
+                db = BQTools()
+                indicator, value = db.pull_value_based_on_other_col_value(
+                    **email_code_pull_args)
+            else:
+                indicator, value = (
+                    'dev_error',
+                    "The email_code_pull_function method is not recognized. "
+                    "The available options are: 'bigquery' or a callable "
+                    "function.")
+        else:
+            indicator, value = email_code_pull_function(**email_code_pull_args)
+
+        # only continue if we didn't have any issues getting the email
+        # code
+        if indicator not in ('dev_error', 'user_error'):
+            verified = Hasher([email_code]).check([value])[0]
+            # we can have errors here if the email code doesn't
+            # match or there is an issue running the check
+            if verified == 'dev_error':
+                raise RuntimeError(
+                    "There was an error verifying the email code. Please "
+                    "contact the administrator.")
+            elif verified:
+                return True
+            else:
+                return False
+        else:
+            raise RuntimeError(value)
+
+    def _add_inputs_email_verification_update(
+            self, verified_store_args: dict, email: str,
+            verified: bool) -> dict:
+        if verified_store_args is None:
+            verified_store_args = {}
+        # add the inputs to verified_store_args
+        verified_store_args['email'] = email
+        verified_store_args['verified'] = verified
+        return verified_store_args
+
+    def _rename_email_verification_store_args(
+            self, verified_store_args: dict) -> dict:
+        """Update the target and reference columns and reference value."""
+        verified_store_args['reference_col'] = verified_store_args[
+            'email_col']
+        verified_store_args['reference_value'] = verified_store_args[
+            'email']
+        verified_store_args['target_col'] = verified_store_args['verified_col']
+        verified_store_args['target_value'] = verified_store_args['verified']
+        del verified_store_args['email_col']
+        del verified_store_args['email']
+        del verified_store_args['verified_col']
+        del verified_store_args['verified']
+        return verified_store_args
+
+    def _update_email_verification(
+            self,
+            verified_store_function: Union[Callable, str],
+            verified_store_args: dict,
+            email: str,
+            verified: bool) -> None:
+        """Update whether the email is verified for a given email."""
+        # first, add the email and verified to the args
+        verified_store_args = self._add_inputs_email_verification_update(
+            verified_store_args, email, verified)
+        if isinstance(verified_store_function, str):
+            if verified_store_function.lower() == 'bigquery':
+                # update the verified_store_args to the correct variable
+                # names
+                verified_store_args = (
+                    self._rename_email_verification_store_args(
+                        verified_store_args))
+                db = BQTools()
+                error = db.update_value_based_on_other_col_value(
+                    **verified_store_args)
+            else:
+                raise ValueError(
+                    "The verified_store_function method is not recognized. "
+                    "The available options are: 'bigquery' or a "
+                    "callable function.")
+        else:
+            error = verified_store_function(**verified_store_args)
+        if error is not None:
+            raise RuntimeError(error)
+
+    def verify_email(self,
+                     email_code_pull_function: Union[str, Callable],
+                     email_code_pull_args: dict = None,
+                     verified_store_function: Union[str, Callable] = None,
+                     verified_store_args: dict = None) -> None:
+        """
+        Pulls the query params from the current URL, checks the email_code
+        and optionally stores whether the email has been verified.
+
+        :param email_code_pull_function: The function to pull the hashed
+            email code associated with the email. This can be a
+            callable function or a string.
+
+            At a minimum, a callable function should take 'email_address'
+            as an argument, but can include other arguments as well.
+            A callable function should return:
+             - A tuple of an indicator and a value
+             - The indicator should be either 'dev_error', 'user_error'
+                or 'success'.
+             - The value should be a string that contains the error
+                message when the indicator is 'dev_error', None when the
+                indicator is 'user_error', and the hashed email
+                code when the indicator is 'success'. It is None with
+                'user_error' since we will handle that in the calling
+                function and create a user_error that tells the user that
+                the email or authorization code is incorrect.
+
+            The current pre-defined function types are:
+                'bigquery': Pulls the email code from a BigQuery table.
+        :param email_code_pull_args: Arguments for the
+            email_code_pull_function. This should not include
+            'email_address' since that will automatically be added here
+            based on the input.
+
+            If using 'bigquery' as your email_code_pull_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails.
+            email_code_col (str): The name of the column in the BigQuery
+                table that contains the email codes.
+        :param verified_store_function: The function to store an indicator
+            that the email was verified. This can be a callable function
+            or a string.
+
+            At a minimum, a callable function should take 'verified' as
+            an argument.
+            A callable function can return an error message.
+
+            The current pre-defined function types are:
+                'bigquery': Saves the verification to a BigQuery table.
+
+            This is only necessary if you want to save the code to
+            a database or other storage location. This can be useful so
+            that you can confirm the email is verified when logging the
+            user in.
+        :param verified_store_args: Arguments for the
+            verified_store_function. This should not include 'verified' as
+            that will automatically be added here based on the result of
+            checking the email code. Instead, it should include things
+            like database name, table name, credentials to log into the
+            database, etc. That way they can be compiled in this function
+            and passed to the function in the callback.
+
+            If using 'bigquery' as your verified_store_function, the
+            following arguments are required:
+
+            bq_creds (dict): Your credentials for BigQuery, such as a
+                service account key (which would be downloaded as JSON and
+                then converted to a dict before using them here).
+            project (str): The name of the Google Cloud project where the
+                BigQuery table is located.
+            dataset (str): The name of the dataset in the BigQuery table.
+            table_name (str): The name of the table in the BigQuery
+                dataset.
+            email_col (str): The name of the column in the BigQuery
+                table that contains the emails.
+            verified_col (str): The name of the column in the BigQuery
+                table that contains the verification indicator.
+            datetime_col (str): The name of the column in the BigQuery
+                table that contains the datetime. This is used to track
+                when the verification was updated.
+        """
+        try:
+            email_address = st.query_params['email_address']
+            email_code = st.query_params['email_code']
+        except KeyError:
+            raise ValueError("The email_address or email_code parameter is "
+                             "missing.")
+
+        # check the code
+        if self._check_email_code(
+                email_address, email_code, email_code_pull_function,
+                email_code_pull_args):
+            st.session_state.stauth['email_verified'] = True
+
+            if verified_store_function is not None:
+                # store that the verification was successful
+                self._update_email_verification(
+                    verified_store_function, verified_store_args,
+                    email_address, True)
+        else:
+            st.session_state.stauth['email_verified'] = False

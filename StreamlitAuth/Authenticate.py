@@ -1447,17 +1447,19 @@ class Authenticate(object):
 
     def _create_full_verification_url(self,
                                       verification_url: str,
-                                      email_code: str) -> str:
-        """Add the code to the verification url."""
+                                      email_code: str,
+                                      user_email: str) -> str:
+        """Add the code and email to the verification url."""
         # see if there are any ? already in the url, meaning there
         # are already query params in the url
         if '?' in verification_url:
-            url_with_params = verification_url + f"&email_code={email_code}"
+            url_with_params = verification_url + f"&email_address={user_email}"
         else:
             # if verification_url does not end with "/" add it
             if verification_url[-1] != "/":
                 verification_url = verification_url + "/"
-            url_with_params = verification_url + f"?email_code={email_code}"
+            url_with_params = verification_url + f"?email_address={user_email}"
+        url_with_params = url_with_params + f"&email_code={email_code}"
         return url_with_params
 
     def _get_message_body(self,
@@ -1465,7 +1467,8 @@ class Authenticate(object):
                           username: str = None, website_email: str = None,
                           password: str = None, info_type: str = None,
                           verification_url: str = None,
-                          email_code: str = None) -> str:
+                          email_code: str = None,
+                          user_email: str = None) -> str:
         if message_type == 'register_user':
             message_body = \
                 (f"""Thank you for registering for {website_name}!\n\n
@@ -1473,7 +1476,7 @@ class Authenticate(object):
                  {username}.\n\n""")
             if verification_url is not None:
                 url_with_params = self._create_full_verification_url(
-                    verification_url, email_code)
+                    verification_url, email_code, user_email)
                 message_body = message_body + \
                     (f"""Please click the following link to verify your email:
                      {url_with_params}.\n\n""")
@@ -1557,10 +1560,15 @@ class Authenticate(object):
         return True
 
     def _send_user_email(
-            self, message_type: str, email_inputs: dict,
-            user_email: str, email_function: Union[callable, str],
-            email_creds: dict = None,  username: str = None,
-            password: str = None, info_type: str = None,
+            self,
+            message_type: str,
+            email_inputs: dict,
+            user_email: str,
+            email_function: Union[callable, str],
+            email_creds: dict = None,
+            username: str = None,
+            password: str = None,
+            info_type: str = None,
             email_code: str = None) -> None:
         """
         Send an email to the user. Can be used for user registration,
@@ -1618,7 +1626,7 @@ class Authenticate(object):
             body = self._get_message_body(
                 message_type, email_inputs['website_name'], username,
                 email_inputs['website_email'], password, info_type,
-                email_inputs['verification_url'], email_code)
+                email_inputs['verification_url'], email_code, user_email)
             email_handler = Email(user_email, subject, body,
                                   email_inputs['website_email'])
             if isinstance(email_function, str):
