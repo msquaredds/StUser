@@ -74,7 +74,7 @@ class Verification(object):
             self,
             auth_codes: dict,
             email_inputs: dict,
-            email_user: Union[Callable, str],
+            email_function: Union[Callable, str],
             email_creds: dict = None) -> None:
         """
         Send an email to the user with their authorization code.
@@ -88,8 +88,8 @@ class Verification(object):
                 registration is happening.
             website_email (str) : The email that is sending the
                 registration confirmation.
-        :param email_user: Provide the function (callable) or method (str)
-            for email here.
+        :param email_function: Provide the function (callable) or method
+            (str) for email here.
             "gmail": the user wants to use their Gmail account to send
                 the email and must have the gmail API enabled. Note that
                 this only works for local / desktop apps. If using this
@@ -114,20 +114,20 @@ class Verification(object):
                     f"{email_inputs['website_email']}.")
             email_handler = Email(email, subject, body,
                                   email_inputs['website_email'])
-            if isinstance(email_user, str):
-                if email_user.lower() == 'gmail':
+            if isinstance(email_function, str):
+                if email_function.lower() == 'gmail':
                     creds = email_handler.get_gmail_oauth2_credentials(
                         **email_creds)
                     error = email_handler.gmail_email_registered_user(creds)
-                elif email_user.lower() == 'sendgrid':
+                elif email_function.lower() == 'sendgrid':
                     error = email_handler.sendgrid_email_registered_user(
                         **email_creds)
                 else:
                     raise ValueError(
-                        "The email_user method is not recognized. "
+                        "The email_function method is not recognized. "
                         "The available options are: 'gmail' or 'sendgrid'.")
             else:
-                error = email_user(**email_creds)
+                error = email_function(**email_creds)
             if error is not None:
                 raise RuntimeError(error)
 
@@ -136,7 +136,7 @@ class Verification(object):
             email: Union[str, list],
             code_store_function: Union[str, Callable] = None,
             code_store_args: dict = None,
-            email_user: Union[Callable, str] = None,
+            email_function: Union[Callable, str] = None,
             email_inputs: dict = None,
             email_creds: dict = None) -> None:
         """
@@ -182,10 +182,10 @@ class Verification(object):
                 table that contains the emails.
             code_col (str): The name of the column in the BigQuery
                 table that contains the authorization codes.
-        :param email_user:  Provide the method for email here, this can be
-            a callable function or a string. The function can also return
-            an error message as a string, which will be handled by the
-            error handler.
+        :param email_function:  Provide the method for email here, this
+            can be a callable function or a string. The function can also
+            return an error message as a string, which will be handled by
+            the error handler.
 
             The current pre-defined function types are:
 
@@ -210,9 +210,9 @@ class Verification(object):
             website_email (str) : The email that is sending the
                 registration confirmation.
         :param email_creds: The credentials to use for the email API. Only
-            necessary if email_user is not None.
+            necessary if email_function is not None.
 
-            If email_user = 'gmail':
+            If email_function = 'gmail':
                 oauth2_credentials_secrets_dict (dict): The dictionary of
                     the client secrets. Note that putting the secrets file
                     in the same directory as the script is not secure.
@@ -220,7 +220,7 @@ class Verification(object):
                     name of the file to store the token, so it is not
                     necessary to reauthenticate every time. If left out,
                     it will default to 'token.json'.
-            If email_user = 'sendgrid':
+            If email_function = 'sendgrid':
                 sendgrid_api_key (str): The API key for the SendGrid API.
                     Note that it should be stored separately in a secure
                     location, such as a Google Cloud Datastore or
@@ -263,9 +263,9 @@ class Verification(object):
                 for email, password in auth_codes.items()}
             self._update_auth_codes(
                 code_store_function, code_store_args, hashed_auth_codes)
-            if email_user is not None:
+            if email_function is not None:
                 self._send_user_email(
-                    auth_codes, email_inputs, email_user, email_creds)
-        elif email_user is not None:
+                    auth_codes, email_inputs, email_function, email_creds)
+        elif email_function is not None:
             self._send_user_email(
-                auth_codes, email_inputs, email_user, email_creds)
+                auth_codes, email_inputs, email_function, email_creds)

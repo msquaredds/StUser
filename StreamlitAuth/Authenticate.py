@@ -27,7 +27,7 @@ class Authenticate(object):
                  user_credentials_session_state: str,
                  preauthorized_session_state: str = None,
                  weak_passwords: list = [],
-                 email_user: Union[Callable, str] = None,
+                 email_function: Union[Callable, str] = None,
                  email_inputs: dict = None,
                  email_creds: dict = None,
                  save_pull_function: str = None,
@@ -67,11 +67,11 @@ class Authenticate(object):
             to None to ignore this feature.
         :param weak_passwords: The list of weak passwords that shouldn't
             be used. This isn't required, but is recommended.
-        :param email_user: If we want to email the user after registering
-            or updating their info, provide the method for email here,
-            this can be a callable function or a string. The function can
-            also return an error message as a string, which will be handled
-            by the error handler.
+        :param email_function: If we want to email the user after
+            registering or updating their info, provide the method for
+            email here, this can be a callable function or a string. The
+            function can also return an error message as a string,
+            which will be handled by the error handler.
 
             This variable is only necessary if you want to email the user
             in all cases and use the same method for emailing in each
@@ -94,7 +94,7 @@ class Authenticate(object):
                 method, you must supply the API key as the sendgrid_creds
                 input here.
         :param email_inputs: The inputs for the email sending process.
-            Only necessary for when email_user is not None.
+            Only necessary for when email_function is not None.
             These are generic for any email method and currently include:
 
             website_name (str): The name of the website where the
@@ -108,9 +108,9 @@ class Authenticate(object):
                 individual methods below, and they will override the ones
                 specified here.
         :param email_creds: The credentials to use for the email API. Only
-            necessary if email_user is not None.
+            necessary if email_function is not None.
 
-            If email_user = 'gmail':
+            If email_function = 'gmail':
                 oauth2_credentials_secrets_dict (dict): The dictionary of
                     the client secrets. Note that putting the secrets file
                     in the same directory as the script is not secure.
@@ -118,7 +118,7 @@ class Authenticate(object):
                     name of the file to store the token, so it is not
                     necessary to reauthenticate every time. If left out,
                     it will default to 'token.json'.
-            If email_user = 'sendgrid':
+            If email_function = 'sendgrid':
                 sendgrid_api_key (str): The API key for the SendGrid API.
                     Note that it should be stored separately in a secure
                     location, such as a Google Cloud Datastore or
@@ -176,7 +176,7 @@ class Authenticate(object):
         self.user_credentials_session_state = user_credentials_session_state
         self.preauthorized_session_state = preauthorized_session_state
         self.weak_passwords = weak_passwords
-        self.email_user = email_user
+        self.email_function = email_function
         self.email_inputs = email_inputs
         self.email_creds = email_creds
         self.save_pull_function = save_pull_function
@@ -483,7 +483,7 @@ class Authenticate(object):
             inputs are incorrect.
         """
         if secondary_function is None:
-            secondary_function = self.email_user
+            secondary_function = self.email_function
         if secondary_inputs is None:
             if self.email_inputs is not None:
                 secondary_inputs = self.email_inputs.copy()
@@ -539,14 +539,14 @@ class Authenticate(object):
 
     def _check_email_exists(
             self,
-            email_user: Union[Callable, str],
+            email_function: Union[Callable, str],
             email_inputs: dict) -> bool:
         """When requiring an email for verification, check that the email
             exists and the inputs are correct."""
-        if email_user is None or 'verification_url' not in email_inputs:
+        if email_function is None or 'verification_url' not in email_inputs:
             eh.add_dev_error(
                 'register_user',
-                "email_user must be defined to verify the email "
+                "email_function must be defined to verify the email "
                 "since verify_email was set to True and the "
                 "'verification_url' must exist in email_inputs.")
             return False
@@ -1383,7 +1383,7 @@ class Authenticate(object):
                 'email': email,
                 'password': password,
                 'email_code': hashed_email_code,
-                'email_verified': 0}
+                'email_verified': False}
         else:
             # store the credentials
             st.session_state[self.user_credentials_session_state] = {
@@ -1476,7 +1476,7 @@ class Authenticate(object):
                     verification_url, email_code)
                 message_body = message_body + \
                     (f"""Please click the following link to verify your email:
-                     {url_with_params}\n\n""")
+                     {url_with_params}.\n\n""")
             message_body = message_body + \
                 (f"""If you did not register or you have any questions, 
                 please contact us at {website_email}.""")
@@ -1558,7 +1558,7 @@ class Authenticate(object):
 
     def _send_user_email(
             self, message_type: str, email_inputs: dict,
-            user_email: str, email_user: Union[callable, str],
+            user_email: str, email_function: Union[callable, str],
             email_creds: dict = None,  username: str = None,
             password: str = None, info_type: str = None,
             email_code: str = None) -> None:
@@ -1583,8 +1583,8 @@ class Authenticate(object):
                 like 'www.verifymyemail.com/'. We will add the
                 verification code based on
         :param user_email: The user's email.
-        :param email_user: Provide the function (callable) or method (str)
-            for email here.
+        :param email_function: Provide the function (callable) or method
+            (str) for email here.
             "gmail": the user wants to use their Gmail account to send
                 the email and must have the gmail API enabled. Note that
                 this only works for local / desktop apps. If using this
@@ -1621,20 +1621,20 @@ class Authenticate(object):
                 email_inputs['verification_url'], email_code)
             email_handler = Email(user_email, subject, body,
                                   email_inputs['website_email'])
-            if isinstance(email_user, str):
-                if email_user.lower() == 'gmail':
+            if isinstance(email_function, str):
+                if email_function.lower() == 'gmail':
                     creds = email_handler.get_gmail_oauth2_credentials(
                         **email_creds)
                     error = email_handler.gmail_email_registered_user(creds)
-                elif email_user.lower() == 'sendgrid':
+                elif email_function.lower() == 'sendgrid':
                     error = email_handler.sendgrid_email_registered_user(
                         **email_creds)
                 else:
-                    error = ("The email_user method is not recognized. "
+                    error = ("The email_function method is not recognized. "
                              "The available options are: 'gmail' or "
                              "'sendgrid'.")
             else:
-                error = email_user(**email_creds)
+                error = email_function(**email_creds)
             if self._email_error_handler(message_type, error):
                 eh.clear_errors()
 
@@ -1647,7 +1647,7 @@ class Authenticate(object):
             auth_code_key: str,
             preauthorization: bool,
             verify_email: bool,
-            email_user: Union[callable, str] = None,
+            email_function: Union[callable, str] = None,
             email_inputs: dict = None,
             email_creds: dict = None,
             cred_save_function: Union[Callable, str] = None,
@@ -1689,9 +1689,9 @@ class Authenticate(object):
             this case and the email will contain a URL with the
             verification code as a parameter. Then you can verify this
             parameter using the verify_email method in Verification.
-        :param email_user: If we want to email the user after registering,
-            provide the function (callable) or method (str) for email
-            here.  See the docstring for register_user for more
+        :param email_function: If we want to email the user after
+            registering, provide the function (callable) or method (str)
+            for email here. See the docstring for register_user for more
             information.
             "gmail": the user wants to use their Gmail account to send
                 the email and must have the gmail API enabled. Note that
@@ -1707,10 +1707,10 @@ class Authenticate(object):
                 method, you must supply the API key as the sendgrid_creds
                 input here.
         :param email_inputs: The inputs for the email sending process.
-            Only necessary for when email_user is not None. See the
+            Only necessary for when email_function is not None. See the
             docstring for register_user for more information.
         :param email_creds: The credentials to use for the email API. Only
-            necessary if email_user is not None. See the
+            necessary if email_function is not None. See the
             docstring for register_user for more information.
         :param cred_save_function: The function to save the credentials.
             See the docstring for register_user for more information.
@@ -1814,17 +1814,17 @@ class Authenticate(object):
                     error = self._save_user_credentials(
                         cred_save_function, cred_save_args)
                     if self._cred_save_error_handler(error):
-                        if email_user is not None:
+                        if email_function is not None:
                             self._send_user_email(
                                 'register_user', email_inputs,
-                                new_email, email_user, email_creds,
+                                new_email, email_function, email_creds,
                                 new_username, email_code=email_code)
                         else:
                             eh.clear_errors()
-                elif email_user is not None:
+                elif email_function is not None:
                     self._send_user_email(
                         'register_user', email_inputs, new_email,
-                        email_user, email_creds, new_username,
+                        email_function, email_creds, new_username,
                         email_code=email_code)
                 else:
                     # get rid of any errors, since we have successfully
@@ -1842,7 +1842,7 @@ class Authenticate(object):
             repeat_password_text_key: str =
               'register_user_repeat_password',
             auth_code_key: str = 'register_user_auth_code',
-            email_user: Union[Callable, str] = None,
+            email_function: Union[Callable, str] = None,
             email_inputs: dict = None,
             email_creds: dict = None,
             cred_save_function: Union[Callable, str] = None,
@@ -1899,15 +1899,15 @@ class Authenticate(object):
             input on the registration form. We attempt to default to a
             unique key, but you can put your own in here if you want to
             customize it or have clashes with other keys/forms.
-        :param email_user: If we want to email the user after registering,
-            provide the method for email here, this can be a callable
-            function or a string. The function can also return an error
-            message as a string, which will be handled by the error
+        :param email_function: If we want to email the user after
+            registering, provide the method for email here, this can be a
+            callable function or a string. The function can also return an
+            error message as a string, which will be handled by the error
             handler.
 
             Only necessary if a) we want to email the user and b)
-            email_user was not defined in the class instantiation. If we
-            defined the email method in the class instantiation and we
+            email_function was not defined in the class instantiation. If
+            we defined the email method in the class instantiation and we
             provide another here, the one here will override the one in
             the class instantiation. This is required if we set
             verify_email to True.
@@ -1928,7 +1928,7 @@ class Authenticate(object):
                 method, you must supply the API key as the sendgrid_creds
                 input here.
         :param email_inputs: The inputs for the email sending process.
-            Only necessary for when email_user is not None.
+            Only necessary for when email_function is not None.
             These are generic for any email method and currently include:
 
             website_name (str): The name of the website where the
@@ -1941,9 +1941,9 @@ class Authenticate(object):
                 like 'www.verifymyemail.com/'. We will add the
                 verification code.
         :param email_creds: The credentials to use for the email API. Only
-            necessary if email_user is not None.
+            necessary if email_function is not None.
 
-            If email_user = 'gmail':
+            If email_function = 'gmail':
                 oauth2_credentials_secrets_dict (dict): The dictionary of
                     the client secrets. Note that putting the secrets file
                     in the same directory as the script is not secure.
@@ -1951,7 +1951,7 @@ class Authenticate(object):
                     name of the file to store the token, so it is not
                     necessary to reauthenticate every time. If left out,
                     it will default to 'token.json'.
-            If email_user = 'sendgrid':
+            If email_function = 'sendgrid':
                 sendgrid_api_key (str): The API key for the SendGrid API.
                     Note that it should be stored separately in a secure
                     location, such as a Google Cloud Datastore or
@@ -2430,11 +2430,11 @@ class Authenticate(object):
             check_inputs = True
         else:
             check_inputs = False
-        email_user, email_inputs, email_creds = self._define_email_vars(
-            'register_user', email_user, email_inputs, email_creds,
+        email_function, email_inputs, email_creds = self._define_email_vars(
+            'register_user', email_function, email_inputs, email_creds,
             check_inputs=check_inputs)
-        # this will return false for email_user if there was an error
-        if not email_user:
+        # this will return false for email_function if there was an error
+        if not email_function:
             return False
         # set the credential saving variables
         cred_save_function, cred_save_args = self._define_save_pull_vars(
@@ -2503,7 +2503,7 @@ class Authenticate(object):
             args=(email_text_key, username_text_key, password_text_key,
                   repeat_password_text_key, auth_code_key, preauthorization,
                   verify_email,
-                  email_user, email_inputs, email_creds,
+                  email_function, email_inputs, email_creds,
                   cred_save_function, cred_save_args,
                   auth_code_pull_function, auth_code_pull_args,
                   incorrect_attempts, locked_hours,
@@ -4357,7 +4357,7 @@ class Authenticate(object):
             email_text_key: str,
             username_pull_function: Union[str, Callable],
             username_pull_args: dict = None,
-            email_user: Union[Callable, str] = None,
+            email_function: Union[Callable, str] = None,
             email_inputs: dict = None,
             email_creds: dict = None) -> None:
         """
@@ -4373,9 +4373,9 @@ class Authenticate(object):
         :param username_pull_args: Arguments for the
             username_pull_function. See the docstring for forgot_username
             for more information.
-        :param email_user: Provide the method for email here, this can be
-            a callable function or a string. See forgot_username for more
-            details.
+        :param email_function: Provide the method for email here, this can
+            be a callable function or a string. See forgot_username for
+            more details.
         :param email_inputs: The inputs for the email sending process.
             See forgot_username for more details.
         :param email_creds: The credentials to use for the email API. See
@@ -4390,10 +4390,10 @@ class Authenticate(object):
                                            username_pull_function,
                                            username_pull_args)
             # username will only be non-False if the username was pulled
-            if username and email_user is not None:
+            if username and email_function is not None:
                 self._send_user_email(
                     'forgot_username', email_inputs, email,
-                    email_user, email_creds, username)
+                    email_function, email_creds, username)
 
     def forgot_username(
             self,
@@ -4401,7 +4401,7 @@ class Authenticate(object):
             email_text_key: str = 'forgot_username_email',
             username_pull_function: Union[str, Callable] = None,
             username_pull_args: dict = None,
-            email_user: Union[Callable, str] = None,
+            email_function: Union[Callable, str] = None,
             email_inputs: dict = None,
             email_creds: dict = None) -> None:
         """
@@ -4459,14 +4459,14 @@ class Authenticate(object):
                 table that contains the emails.
             username_col (str): The name of the column in the BigQuery
                 table that contains the usernames.
-        :param email_user:  Provide the method for email here, this can be
-            a callable function or a string. The function can also return
-            an error message as a string, which will be handled by the
-            error handler.
+        :param email_function:  Provide the method for email here, this
+            can be a callable function or a string. The function can also
+            return an error message as a string, which will be handled by
+            the error handler.
 
             Only necessary if a) we want to email the user and b)
-            email_user was not defined in the class instantiation. If we
-            defined the email method in the class instantiation and we
+            email_function was not defined in the class instantiation. If
+            we defined the email method in the class instantiation and we
             provide another here, the one here will override the one in
             the class instantiation.
 
@@ -4493,9 +4493,9 @@ class Authenticate(object):
             website_email (str) : The email that is sending the
                 registration confirmation.
         :param email_creds: The credentials to use for the email API. Only
-            necessary if email_user is not None.
+            necessary if email_function is not None.
 
-            If email_user = 'gmail':
+            If email_function = 'gmail':
                 oauth2_credentials_secrets_dict (dict): The dictionary of
                     the client secrets. Note that putting the secrets file
                     in the same directory as the script is not secure.
@@ -4503,7 +4503,7 @@ class Authenticate(object):
                     name of the file to store the token, so it is not
                     necessary to reauthenticate every time. If left out,
                     it will default to 'token.json'.
-            If email_user = 'sendgrid':
+            If email_function = 'sendgrid':
                 sendgrid_api_key (str): The API key for the SendGrid API.
                     Note that it should be stored separately in a secure
                     location, such as a Google Cloud Datastore or
@@ -4535,10 +4535,10 @@ class Authenticate(object):
             return False
 
         # set the email variables
-        email_user, email_inputs, email_creds = self._define_email_vars(
-            'forgot_username', email_user, email_inputs, email_creds)
-        # this will return false for email_user if there was an error
-        if not email_user:
+        email_function, email_inputs, email_creds = self._define_email_vars(
+            'forgot_username', email_function, email_inputs, email_creds)
+        # this will return false for email_function if there was an error
+        if not email_function:
             return False
         # set the username pull variables
         username_pull_function, username_pull_args = (
@@ -4567,7 +4567,7 @@ class Authenticate(object):
         forgot_username_form.form_submit_button(
             'Get Username', on_click=self._get_username,
             args=(email_text_key, username_pull_function, username_pull_args,
-                  email_user, email_inputs, email_creds))
+                  email_function, email_inputs, email_creds))
 
     def _check_email_username_info(self, email: str, username: str,
                                    repeat_username: str) -> bool:
@@ -4656,7 +4656,7 @@ class Authenticate(object):
             username_pull_args: dict = None,
             password_store_function: Union[str, Callable] = None,
             password_store_args: dict = None,
-            email_user: Union[Callable, str] = None,
+            email_function: Union[Callable, str] = None,
             email_inputs: dict = None,
             email_creds: dict = None) -> None:
         """
@@ -4682,9 +4682,9 @@ class Authenticate(object):
         :param password_store_args: Arguments for the
             password_store_function. See the docstring for
             forgot_password for more information.
-        :param email_user: Provide the method for email here, this can be
-            a callable function or a string. See forgot_password for more
-            details.
+        :param email_function: Provide the method for email here, this can
+            be a callable function or a string. See forgot_password for
+            more details.
         :param email_inputs: The inputs for the email sending process.
             See forgot_password for more details.
         :param email_creds: The credentials to use for the email API. See
@@ -4719,16 +4719,16 @@ class Authenticate(object):
                         password_store_function, password_store_args,
                         username, hashed_password)
                     if self._password_update_error_handler(error):
-                        if email_user is not None:
+                        if email_function is not None:
                             self._send_user_email(
                                 'forgot_password', email_inputs, email,
-                                email_user, email_creds, password=password)
+                                email_function, email_creds, password=password)
                         else:
                             eh.clear_errors()
-                elif email_user is not None:
+                elif email_function is not None:
                     self._send_user_email(
                         'forgot_password', email_inputs, email,
-                        email_user, email_creds, password=password)
+                        email_function, email_creds, password=password)
                 else:
                     # get rid of any errors, since we have successfully
                     # updated the password
@@ -4744,7 +4744,7 @@ class Authenticate(object):
             username_pull_args: dict = None,
             password_store_function: Union[str, Callable] = None,
             password_store_args: dict = None,
-            email_user: Union[Callable, str] = None,
+            email_function: Union[Callable, str] = None,
             email_inputs: dict = None,
             email_creds: dict = None) -> None:
         """
@@ -4850,10 +4850,10 @@ class Authenticate(object):
             datetime_col (str): The name of the column in the BigQuery
                 table that contains the datetime. This is used to track
                 when the password was updated.
-        :param email_user:  Provide the method for email here, this can be
-            a callable function or a string. The function can also return
-            an error message as a string, which will be handled by the
-            error handler.
+        :param email_function:  Provide the method for email here, this
+            can be a callable function or a string. The function can also
+            return an error message as a string, which will be handled by
+            the error handler.
 
             The current pre-defined function types are:
 
@@ -4878,9 +4878,9 @@ class Authenticate(object):
             website_email (str) : The email that is sending the
                 registration confirmation.
         :param email_creds: The credentials to use for the email API. Only
-            necessary if email_user is not None.
+            necessary if email_function is not None.
 
-            If email_user = 'gmail':
+            If email_function = 'gmail':
                 oauth2_credentials_secrets_dict (dict): The dictionary of
                     the client secrets. Note that putting the secrets file
                     in the same directory as the script is not secure.
@@ -4888,7 +4888,7 @@ class Authenticate(object):
                     name of the file to store the token, so it is not
                     necessary to reauthenticate every time. If left out,
                     it will default to 'token.json'.
-            If email_user = 'sendgrid':
+            If email_function = 'sendgrid':
                 sendgrid_api_key (str): The API key for the SendGrid API.
                     Note that it should be stored separately in a secure
                     location, such as a Google Cloud Datastore or
@@ -4920,10 +4920,10 @@ class Authenticate(object):
             return False
 
         # set the email variables
-        email_user, email_inputs, email_creds = self._define_email_vars(
-            'forgot_password', email_user, email_inputs, email_creds)
-        # this will return false for email_user if there was an error
-        if not email_user:
+        email_function, email_inputs, email_creds = self._define_email_vars(
+            'forgot_password', email_function, email_inputs, email_creds)
+        # this will return false for email_function if there was an error
+        if not email_function:
             return False
         # set the username pull variables
         username_pull_function, username_pull_args = (
@@ -4968,7 +4968,7 @@ class Authenticate(object):
             args=(email_text_key, username_text_key, repeat_username_text_key,
                   username_pull_function, username_pull_args,
                   password_store_function, password_store_args,
-                  email_user, email_inputs, email_creds))
+                  email_function, email_inputs, email_creds))
 
     def _check_store_new_info(self, store_new_info: Union[str, list]):
         """We want to make sure store_new_info is either 'any' or a string
@@ -5310,7 +5310,7 @@ class Authenticate(object):
     def _get_email_address_send_email(
             self, info_type: str, new_info: str, username: str,
             info_pull_function: Union[str, Callable], info_pull_args: dict,
-            email_user: Union[Callable, str], email_inputs: dict,
+            email_function: Union[Callable, str], email_inputs: dict,
             email_creds: dict) -> None:
         """Get the user's email address and send them en email to let them
             know their info has been updated."""
@@ -5320,7 +5320,7 @@ class Authenticate(object):
         if email_address:
             self._send_user_email(
                 'update_user_info', email_inputs,
-                email_address, email_user, email_creds,
+                email_address, email_function, email_creds,
                 info_type=info_type)
 
     def _update_user_info(
@@ -5333,7 +5333,7 @@ class Authenticate(object):
             info_pull_args: dict = None,
             info_store_function: Union[str, Callable] = None,
             info_store_args: dict = None,
-            email_user: Union[Callable, str] = None,
+            email_function: Union[Callable, str] = None,
             email_inputs: dict = None,
             email_creds: dict = None,
             store_new_info: Union[str, list] = None) -> None:
@@ -5363,9 +5363,9 @@ class Authenticate(object):
             docstring for update_user_info for more information.
         :param info_store_args: Arguments for the info_store_function. See
             the docstring for update_user_info for more information.
-        :param email_user: Provide the method for email here, this can be
-            a callable function or a string. See update_user_info for more
-            details.
+        :param email_function: Provide the method for email here, this can
+            be a callable function or a string. See update_user_info for
+            more details.
         :param email_inputs: The inputs for the email sending process.
             See update_user_info for more details.
         :param email_creds: The credentials to use for the email API. See
@@ -5411,18 +5411,18 @@ class Authenticate(object):
                         info_store_function, info_store_args, new_info,
                         info_type, existing_username)
                     if self._user_info_update_error_handler(error, info_type):
-                        if email_user is not None:
+                        if email_function is not None:
                             self._get_email_address_send_email(
                                 info_type, new_info, updated_username,
                                 info_pull_function, info_pull_args,
-                                email_user, email_inputs, email_creds)
+                                email_function, email_inputs, email_creds)
                         else:
                             eh.clear_errors()
-                elif email_user is not None:
+                elif email_function is not None:
                     self._get_email_address_send_email(
                         info_type, new_info, updated_username,
                         info_pull_function, info_pull_args,
-                        email_user, email_inputs, email_creds)
+                        email_function, email_inputs, email_creds)
                 else:
                     # get rid of any errors, since we have successfully
                     # updated the user info
@@ -5440,7 +5440,7 @@ class Authenticate(object):
             info_pull_args: dict = None,
             info_store_function: Union[str, Callable] = None,
             info_store_args: dict = None,
-            email_user: Union[Callable, str] = None,
+            email_function: Union[Callable, str] = None,
             email_inputs: dict = None,
             email_creds: dict = None,
             store_new_info: Union[str, list] = None) -> None:
@@ -5553,10 +5553,10 @@ class Authenticate(object):
                  'datetime': datetime_col}
                 Note that we have datetime too since we need to record
                 when the info was updated.
-        :param email_user:  Provide the method for email here, this can be
-            a callable function or a string. The function can also return
-            an error message as a string, which will be handled by the
-            error handler.
+        :param email_function:  Provide the method for email here, this
+            can be a callable function or a string. The function can also
+            return an error message as a string, which will be handled by
+            the error handler.
 
             The current pre-defined function types are:
 
@@ -5581,9 +5581,9 @@ class Authenticate(object):
             website_email (str) : The email that is sending the
                 registration confirmation.
         :param email_creds: The credentials to use for the email API. Only
-            necessary if email_user is not None.
+            necessary if email_function is not None.
 
-            If email_user = 'gmail':
+            If email_function = 'gmail':
                 oauth2_credentials_secrets_dict (dict): The dictionary of
                     the client secrets. Note that putting the secrets file
                     in the same directory as the script is not secure.
@@ -5591,7 +5591,7 @@ class Authenticate(object):
                     name of the file to store the token, so it is not
                     necessary to reauthenticate every time. If left out,
                     it will default to 'token.json'.
-            If email_user = 'sendgrid':
+            If email_function = 'sendgrid':
                 sendgrid_api_key (str): The API key for the SendGrid API.
                     Note that it should be stored separately in a secure
                     location, such as a Google Cloud Datastore or
@@ -5639,10 +5639,10 @@ class Authenticate(object):
             return False
 
         # set the email variables
-        email_user, email_inputs, email_creds = self._define_email_vars(
-            'update_user_info', email_user, email_inputs, email_creds)
-        # this will return false for email_user if there was an error
-        if not email_user:
+        email_function, email_inputs, email_creds = self._define_email_vars(
+            'update_user_info', email_function, email_inputs, email_creds)
+        # this will return false for email_function if there was an error
+        if not email_function:
             return False
         # set the info pull variables
         info_pull_function, info_pull_args = (
@@ -5715,5 +5715,5 @@ class Authenticate(object):
                   user_info_text_key_new, user_info_text_key_new_repeat,
                   info_pull_function, info_pull_args,
                   info_store_function, info_store_args,
-                  email_user, email_inputs, email_creds,
+                  email_function, email_inputs, email_creds,
                   store_new_info))
