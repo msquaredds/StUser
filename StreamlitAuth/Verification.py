@@ -527,12 +527,14 @@ class Verification(object):
                 table that contains the datetime. This is used to track
                 when the verification was updated.
         """
-        try:
-            email_address = st.query_params['email_address']
-            email_code = st.query_params['email_code']
-        except KeyError:
-            raise KeyError("The email_address or email_code parameter is "
-                           "missing.")
+        # try:
+        email_address = st.query_params['email_address']
+        email_code = st.query_params['email_code']
+        st.write(email_address)
+        st.write(email_code)
+        # except KeyError:
+        #     raise KeyError("The email_address or email_code parameter is "
+        #                    "missing.")
 
         # check the code
         if self._check_email_code(
