@@ -1455,9 +1455,9 @@ class Authenticate(object):
         if '?' in verification_url:
             url_with_params = verification_url + f"&email_address={user_email}"
         else:
-            # if verification_url does not end with "/" add it
-            if verification_url[-1] != "/":
-                verification_url = verification_url + "/"
+            # for query params, we don't want the url to end with a /
+            if verification_url[-1] == "/":
+                verification_url = verification_url[:-1]
             url_with_params = verification_url + f"?email_address={user_email}"
         url_with_params = url_with_params + f"&email_code={email_code}"
         return url_with_params
@@ -1946,8 +1946,10 @@ class Authenticate(object):
             verification_url (str): The base email for verification, not
                 including the verification code parameter. Required if
                 verify_email is True. For example, it could be something
-                like 'www.verifymyemail.com/'. We will add the
-                verification code.
+                like 'www.verifymyemail.com'. We will add the
+                verification code. Note that for st.query_params to pull
+                out the query parameters, we need the url to end without
+                a "/", so we remove any trailing "/".
         :param email_creds: The credentials to use for the email API. Only
             necessary if email_function is not None.
 

@@ -528,11 +528,8 @@ class Verification(object):
                 when the verification was updated.
         """
         # try:
-        query_params = st.query_params.to_dict()
-        # query_params = st.experimental_get_query_params()
-        st.write(query_params)
-        email_address = query_params['email_address'][0]
-        email_code = query_params['email_code'][0]
+        email_address = st.query_params['email_address']
+        email_code = st.query_params['email_code']
         st.write(email_address)
         st.write(email_code)
         # except KeyError:
