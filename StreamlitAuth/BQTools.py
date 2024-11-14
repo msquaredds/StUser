@@ -601,7 +601,7 @@ class BQTools(object):
             reference_col: str,
             reference_value: str,
             target_col: str,
-            target_value: str,
+            target_value: Union[str, bool],
             datetime_col: str) -> Tuple[str, str]:
         """
         Update a value in a specific column in BigQuery based on a value
@@ -636,8 +636,10 @@ class BQTools(object):
 
         # create the query
         table_id = project + "." + dataset + "." + table_name
+        if isinstance(target_value, str):
+            target_value = "'" + target_value + "'"
         sql_statement = (f"UPDATE {table_id} "
-                         f"SET {target_col} = '{target_value}', "
+                         f"SET {target_col} = {target_value}, "
                          f"{datetime_col} = '{new_datetime}' "
                          f"WHERE {reference_col} = '{reference_value}'")
 
