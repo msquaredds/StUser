@@ -414,10 +414,8 @@ class Verification(object):
             verified: bool) -> None:
         """Update whether the email is verified for a given email."""
         # first, add the email and verified to the args
-        st.write("verified", verified)
         verified_store_args = self._add_inputs_email_verification_update(
             verified_store_args, email, verified)
-        st.write("verified_store_args", verified_store_args)
         if isinstance(verified_store_function, str):
             if verified_store_function.lower() == 'bigquery':
                 # update the verified_store_args to the correct variable
@@ -425,7 +423,6 @@ class Verification(object):
                 verified_store_args = (
                     self._rename_email_verification_store_args(
                         verified_store_args))
-                st.write("verified_store_args", verified_store_args)
                 db = BQTools()
                 error = db.update_value_based_on_other_col_value(
                     **verified_store_args)
@@ -530,14 +527,12 @@ class Verification(object):
                 table that contains the datetime. This is used to track
                 when the verification was updated.
         """
-        # try:
-        email_address = st.query_params['email_address']
-        email_code = st.query_params['email_code']
-        st.write(email_address)
-        st.write(email_code)
-        # except KeyError:
-        #     raise KeyError("The email_address or email_code parameter is "
-        #                    "missing.")
+        try:
+            email_address = st.query_params['email_address']
+            email_code = st.query_params['email_code']
+        except KeyError:
+            raise KeyError("The email_address or email_code parameter is "
+                           "missing.")
 
         # check the code
         if self._check_email_code(
