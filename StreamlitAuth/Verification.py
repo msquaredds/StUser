@@ -350,7 +350,7 @@ class Verification(object):
         # pull the email code
         if isinstance(email_code_pull_function, str):
             if email_code_pull_function.lower() == 'bigquery':
-                email_code_pull_args = self._rename_auth_code_pull_args(
+                email_code_pull_args = self._rename_email_code_pull_args(
                     email_code_pull_args)
                 db = BQTools()
                 indicator, value = db.pull_value_based_on_other_col_value(
