@@ -248,11 +248,12 @@ class BQTools(object):
             table_name: str,
             reference_col: str,
             reference_value: str,
-            target_col: str) -> Tuple[str, str]:
+            target_col: Union[str, list]) -> Tuple[str, str]:
         """
         Pull a value from a BigQuery column (target), based on the value
-            in another column (reference). This is meant to be a unique
-            match, so only returns the first value found.
+            in another column (reference). The target can be one or more
+            data fields. This is meant to be a unique match (per field),
+            so only returns the first value found (per field).
 
         :param bq_creds: The credentials to access the BigQuery project.
             These should, at a minimum, have the roles of "BigQuery Data
@@ -263,7 +264,7 @@ class BQTools(object):
         :param reference_col: The column that holds the values to compare
             against.
         :param reference_value: The value to match in the reference_col.
-        :param target_col: The column that holds the value to pull.
+        :param target_col: The column(s) that holds the value to pull.
         :return: A tuple with an indicator labeling the result as either
             'success' or 'error', and the hashed password if successful or
             the error message if not.
@@ -276,6 +277,8 @@ class BQTools(object):
 
         # create the query
         table_id = project + "." + dataset + "." + table_name
+        if isinstance(target_col, list):
+            target_col = ', '.join(target_col)
         sql_statement = (f"SELECT {target_col} FROM {table_id} "
                          f"WHERE {reference_col} = '{reference_value}'")
 
@@ -284,10 +287,13 @@ class BQTools(object):
         if isinstance(query_result, tuple):
             return query_result
 
-        # create the df pull the first value
+        # create the df pull the first value(s)
         df = query_result.to_dataframe()
         try:
-            target_value = df.iloc[0, 0]
+            if isinstance(target_col, list):
+                target_value = tuple(df.iloc[0, :])
+            else:
+                target_value = df.iloc[0, 0]
         except Exception as e:
             # we don't have a message here because this is handled by the
             # calling function - it should combine the lack of a value

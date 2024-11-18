@@ -2536,6 +2536,7 @@ class Authenticate(object):
     def _define_login_functions_args(
             self,
             password_pull_function: Union[str, Callable],
+            check_email_verification: bool,
             password_pull_args: dict,
             all_locked_function: str,
             all_locked_args: dict,
@@ -2577,6 +2578,11 @@ class Authenticate(object):
             c. General/specific method def. (password_pull_function,
                                              password_pull_args)
         """
+        # if checking email verification, we want the set of args to check
+        # against to also include the email_verification_col
+        if check_email_verification and password_pull_function == 'bigquery':
+            self.save_pull_args_function_specific['bigquery']['login'][
+                'password_pull_args'].extend(['email_verification_col'])
         password_pull_function, password_pull_args = self._define_save_pull_vars(
             'login', 'password_pull_args',
             password_pull_function, password_pull_args)
@@ -2711,10 +2717,18 @@ class Authenticate(object):
             'username_col']
         password_pull_args['reference_value'] = password_pull_args[
             'username']
-        password_pull_args['target_col'] = password_pull_args['password_col']
+        if 'email_verification_col' in password_pull_args:
+            password_pull_args['target_col'] = [password_pull_args[
+                'password_col'], password_pull_args[
+                'email_verification_col']]
+        else:
+            password_pull_args['target_col'] = password_pull_args[
+                'password_col']
         del password_pull_args['username_col']
         del password_pull_args['username']
         del password_pull_args['password_col']
+        if 'email_verification_col' in password_pull_args:
+            del password_pull_args['email_verification_col']
         return password_pull_args
 
     def _pull_login_locked_unlocked_error_handler(self, indicator: str,
@@ -2948,6 +2962,7 @@ class Authenticate(object):
             password: str,
             username: str,
             password_pull_function: Union[str, Callable],
+            check_email_verification: bool,
             password_pull_args: dict = None) -> bool:
         """
         Pulls the expected password and checks the validity of the entered
@@ -2975,6 +2990,13 @@ class Authenticate(object):
 
             The current pre-defined function types are:
                 'bigquery': Pulls the password from a BigQuery table.
+        :param check_email_verification: Whether to check if the user's
+            email has been verified. This will happen within the same
+            function as the password_pull_function, so you will need to
+            incorporate any necessary arguments into password_pull_args.
+            If writing your own function for password_pull_function, you
+            should make sure to check the email verification if this is
+            set to True.
         :param password_pull_args: Arguments for the
             password_pull_function. This should not include 'username'
             since that will automatically be added here based on the
@@ -2995,6 +3017,13 @@ class Authenticate(object):
                 table that contains the usernames.
             password_col (str): The name of the column in the BigQuery
                 table that contains the passwords.
+            email_verification_col (str): Only necessary if the
+                check_email_verification is set to True. The name of the
+                column in the BigQuery table that contains the email
+                verification status (True or False). The built-in
+                BigQuery version assumes the email verification column is
+                in the same table as the password. If not, you will need
+                to build your own function to pull from separate places.
         """
         # add the username to the arguments for the password pull function
         password_pull_args = self._add_username_to_args(
@@ -3018,7 +3047,18 @@ class Authenticate(object):
 
         # only continue if we didn't have any issues getting the password
         if self._password_pull_error_handler(indicator, value):
-            verified = Hasher([password]).check([value])[0]
+            if check_email_verification:
+                pulled_password = value[0]
+                email_verified = value[1]
+                if not email_verified:
+                    eh.add_user_error(
+                        'login',
+                        "Your email has not been verified. Please check "
+                        "your email for the verification link.")
+                    return False
+            else:
+                pulled_password = value
+            verified = Hasher([password]).check([pulled_password])[0]
             # we can have errors here if the password doesn't match or
             # there is an issue running the check
             return self._password_verification_error_handler(verified)
@@ -3560,6 +3600,7 @@ class Authenticate(object):
             username_text_key: str,
             password_text_key: str,
             password_pull_function: Union[str, Callable],
+            check_email_verification: bool = False,
             password_pull_args: dict = None,
             incorrect_attempts: int = 10,
             locked_hours: int = 24,
@@ -3590,6 +3631,9 @@ class Authenticate(object):
         :param password_pull_function: The function to pull the password
             associated with the username. This can be a callable function
             or a string. See the docstring for login for more information.
+        :param check_email_verification: Whether to check if the email
+            associated with the username has been verified. See the
+            docstring for login for more information.
         :param password_pull_args: Arguments for the
             password_pull_function. See the docstring for login for more
             information.
@@ -3658,8 +3702,10 @@ class Authenticate(object):
                 st.session_state.stauth['username'] = None
                 st.session_state.stauth['authentication_status'] = False
             else:
-                # only continue if the password is correct
+                # only continue if the password is correct (and the email
+                # has been verified, if requiring that)
                 if self._check_pw(password, username, password_pull_function,
+                                  check_email_verification,
                                   password_pull_args):
                     # note that even with errors storing the data, we
                     # still let the user login, so we clear the errors
@@ -3703,6 +3749,7 @@ class Authenticate(object):
               username_text_key: str = 'login_username',
               password_text_key: str = 'login_password',
               password_pull_function: Union[str, Callable] = 'bigquery',
+              check_email_verification: bool = False,
               password_pull_args: dict = None,
               incorrect_attempts: int = 10,
               locked_hours: int = 24,
@@ -3775,6 +3822,13 @@ class Authenticate(object):
                     performs a basic SQL lookup to see if there are any
                     passwords associated with the given username and, if
                     so, returns that (hashed) password.
+        :param check_email_verification: Whether to check if the user's
+            email has been verified. This will happen within the same
+            function as the password_pull_function, so you will need to
+            incorporate any necessary arguments into password_pull_args.
+            If writing your own function for password_pull_function, you
+            should make sure to check the email verification if this is
+            set to True.
         :param password_pull_args: Arguments for the
             password_pull_function.
 
@@ -3796,6 +3850,13 @@ class Authenticate(object):
                 table that contains the usernames.
             password_col (str): The name of the column in the BigQuery
                 table that contains the passwords.
+            email_verification_col (str): Only necessary if the
+                check_email_verification is set to True. The name of the
+                column in the BigQuery table that contains the email
+                verification status (True or False). The built-in
+                BigQuery version assumes the email verification column is
+                in the same table as the password. If not, you will need
+                to build your own function to pull from separate places.
 
             Note that bq_creds, project and dataset could be defined in
             the class instantiation, although they can be overwritten
@@ -4153,7 +4214,8 @@ class Authenticate(object):
         # as the correct incorrect attempts functions and arguments
         funcs_args_defined, funcs_and_args = (
             self._define_login_functions_args(
-                password_pull_function, password_pull_args,
+                password_pull_function, check_email_verification,
+                password_pull_args,
                 all_locked_function, all_locked_args,
                 locked_info_function, locked_info_args,
                 store_locked_time_function, store_locked_time_args,
@@ -4201,7 +4263,8 @@ class Authenticate(object):
         login_form.form_submit_button(
             'Login', on_click=self._check_credentials,
             args=(username_text_key, password_text_key,
-                  password_pull_function, password_pull_args,
+                  password_pull_function, check_email_verification,
+                  password_pull_args,
                   incorrect_attempts, locked_hours,
                   locked_info_function, locked_info_args,
                   store_locked_time_function, store_locked_time_args,
