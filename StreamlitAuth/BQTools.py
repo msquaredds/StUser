@@ -293,7 +293,9 @@ class BQTools(object):
         st.write("df", df)
         try:
             if isinstance(target_col, list):
+                st.write("df.iloc[0, :]", df.iloc[0, :])
                 target_value = tuple(df.iloc[0, :])
+                st.write("target_value", target_value)
             else:
                 target_value = df.iloc[0, 0]
         except Exception as e:

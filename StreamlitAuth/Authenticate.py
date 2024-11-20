@@ -3034,7 +3034,6 @@ class Authenticate(object):
                 password_pull_args = self._rename_password_pull_args(
                     password_pull_args)
                 db = BQTools()
-                st.write("password_pull_args", password_pull_args)
                 indicator, value = db.pull_value_based_on_other_col_value(
                     **password_pull_args)
             else:
