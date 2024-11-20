@@ -3049,7 +3049,9 @@ class Authenticate(object):
         if self._password_pull_error_handler(indicator, value):
             if check_email_verification:
                 pulled_password = value[0]
+                st.write("pulled_password", pulled_password)
                 email_verified = value[1]
+                st.write("email_verified", email_verified)
                 if not email_verified:
                     eh.add_user_error(
                         'login',
@@ -3058,7 +3060,9 @@ class Authenticate(object):
                     return False
             else:
                 pulled_password = value
+                st.write("pulled_password", pulled_password)
             verified = Hasher([password]).check([pulled_password])[0]
+            st.write("verified", verified)
             # we can have errors here if the password doesn't match or
             # there is an issue running the check
             return self._password_verification_error_handler(verified)
