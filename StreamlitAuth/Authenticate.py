@@ -3738,10 +3738,6 @@ class Authenticate(object):
                         self._store_login_lock_time_handler(
                             username, store_locked_time_function,
                             store_locked_time_args)
-                    else:
-                        eh.add_user_error(
-                            'login',
-                            "Incorrect username or password.")
         else:
             # here we have already set any errors in previous functions,
             # so just set authentication_status to false
