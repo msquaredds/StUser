@@ -279,6 +279,9 @@ class BQTools(object):
         table_id = project + "." + dataset + "." + table_name
         if isinstance(target_col, list):
             target_col = ', '.join(target_col)
+            multiple_results = True
+        else:
+            multiple_results = False
         sql_statement = (f"SELECT {target_col} FROM {table_id} "
                          f"WHERE {reference_col} = '{reference_value}'")
 
@@ -292,7 +295,7 @@ class BQTools(object):
         import streamlit as st
         st.write("df", df)
         try:
-            if isinstance(target_col, list):
+            if multiple_results:
                 st.write("df.iloc[0, :]", df.iloc[0, :])
                 target_value = tuple(df.iloc[0, :])
                 st.write("target_value", target_value)
