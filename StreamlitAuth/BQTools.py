@@ -292,13 +292,9 @@ class BQTools(object):
 
         # create the df pull the first value(s)
         df = query_result.to_dataframe()
-        import streamlit as st
-        st.write("df", df)
         try:
             if multiple_results:
-                st.write("df.iloc[0, :]", df.iloc[0, :])
                 target_value = tuple(df.iloc[0, :])
-                st.write("target_value", target_value)
             else:
                 target_value = df.iloc[0, 0]
         except Exception as e:
