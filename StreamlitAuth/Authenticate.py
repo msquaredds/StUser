@@ -2947,7 +2947,7 @@ class Authenticate(object):
             eh.add_dev_error(
                 'login',
                 "There was an error checking the user's password. "
-                "Error: " + verified[1])
+                "Error: " + str(verified[1]))
             return False
         elif verified:
             return True
@@ -3034,6 +3034,7 @@ class Authenticate(object):
                 password_pull_args = self._rename_password_pull_args(
                     password_pull_args)
                 db = BQTools()
+                st.write("password_pull_args", password_pull_args)
                 indicator, value = db.pull_value_based_on_other_col_value(
                     **password_pull_args)
             else:

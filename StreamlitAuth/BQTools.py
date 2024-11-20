@@ -289,6 +289,8 @@ class BQTools(object):
 
         # create the df pull the first value(s)
         df = query_result.to_dataframe()
+        import streamlit as st
+        st.write("df", df)
         try:
             if isinstance(target_col, list):
                 target_value = tuple(df.iloc[0, :])
