@@ -317,8 +317,9 @@ class BQTools(object):
         """
         Pull a full column of data from BigQuery.
 
-        Note that this method isn't currently used in Authenticated, but
-        is useful for gathering usernames for a login page.
+        Note that this method isn't currently used in Forms or
+        Verification, but is useful for gathering usernames for a login
+        page.
 
         :param bq_creds: The credentials to access the BigQuery project.
             These should, at a minimum, have the roles of "BigQuery Data

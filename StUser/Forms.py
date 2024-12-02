@@ -1,20 +1,17 @@
-import copy
 import pandas as pd
-import secrets
 import streamlit as st
 
 from datetime import datetime, timedelta
 from typing import Callable, Tuple, Union
 
-from StreamlitAuth import ErrorHandling as eh
-from StreamlitAuth.BQTools import BQTools
-from StreamlitAuth.Email import Email
-from StreamlitAuth.Encryptor import GenericEncryptor, GoogleEncryptor
-from StreamlitAuth.Hasher import Hasher
-from StreamlitAuth.Validator import Validator
+from StUser import ErrorHandling as eh
+from StUser.BQTools import BQTools
+from StUser.Email import Email
+from StUser.Hasher import Hasher
+from StUser.Validator import Validator
 
 
-class Authenticate(object):
+class Forms(object):
     """
     Create register user, login, forgot password, forgot username,
     reset password, reset username and logout methods/widgets.
@@ -262,12 +259,12 @@ class Authenticate(object):
         if not self._check_class_save_pull():
             raise ValueError()
 
-        if 'stauth' not in st.session_state:
-            st.session_state['stauth'] = {}
-        if 'authentication_status' not in st.session_state.stauth:
-            st.session_state.stauth['authentication_status'] = False
-        if 'username' not in st.session_state.stauth:
-            st.session_state.stauth['username'] = None
+        if 'stuser' not in st.session_state:
+            st.session_state['stuser'] = {}
+        if 'authentication_status' not in st.session_state.stuser:
+            st.session_state.stuser['authentication_status'] = False
+        if 'username' not in st.session_state.stuser:
+            st.session_state.stuser['username'] = None
 
     def _check_class_session_states(self) -> bool:
         """
@@ -895,10 +892,10 @@ class Authenticate(object):
             else:
                 return True
         else:
-            if ('register_user_lock' in st.session_state.stauth and
-                    email in st.session_state.stauth[
+            if ('register_user_lock' in st.session_state.stuser and
+                    email in st.session_state.stuser[
                         'register_user_lock'].keys()):
-                latest_lock = max(st.session_state.stauth[
+                latest_lock = max(st.session_state.stuser[
                                       'register_user_lock'][email])
             else:
                 latest_lock = None
@@ -1058,13 +1055,13 @@ class Authenticate(object):
 
         :return: False if any errors, True if no errors.
         """
-        if 'failed_auth_attempts' not in st.session_state.stauth:
-            st.session_state.stauth['failed_auth_attempts'] = {}
-        if email not in st.session_state.stauth[
+        if 'failed_auth_attempts' not in st.session_state.stuser:
+            st.session_state.stuser['failed_auth_attempts'] = {}
+        if email not in st.session_state.stuser[
                 'failed_auth_attempts'].keys():
-            st.session_state.stauth['failed_auth_attempts'][email] = []
+            st.session_state.stuser['failed_auth_attempts'][email] = []
         # append the current datetime
-        st.session_state.stauth['failed_auth_attempts'][email].append(
+        st.session_state.stuser['failed_auth_attempts'][email].append(
             datetime.utcnow())
 
         if store_incorrect_attempts_function is not None:
@@ -1112,10 +1109,10 @@ class Authenticate(object):
                 pull_incorrect_attempts_function, pull_incorrect_attempts_args)
         else:
             # if not, just use the session_state
-            if ('failed_auth_attempts' in st.session_state.stauth and
-                    email in st.session_state.stauth[
+            if ('failed_auth_attempts' in st.session_state.stuser and
+                    email in st.session_state.stuser[
                         'failed_auth_attempts'].keys()):
-                attempts = pd.Series(st.session_state.stauth[
+                attempts = pd.Series(st.session_state.stuser[
                                          'failed_auth_attempts'][email])
             else:
                 attempts = None
@@ -1229,13 +1226,13 @@ class Authenticate(object):
             store_locked_times_function. See the docstring for
             register_user for more information.
         """
-        if 'register_user_lock' not in st.session_state.stauth:
-            st.session_state.stauth['register_user_lock'] = {}
-        if email not in st.session_state.stauth[
+        if 'register_user_lock' not in st.session_state.stuser:
+            st.session_state.stuser['register_user_lock'] = {}
+        if email not in st.session_state.stuser[
             'register_user_lock'].keys():
-            st.session_state.stauth['register_user_lock'][email] = []
+            st.session_state.stuser['register_user_lock'][email] = []
         # append the current datetime
-        st.session_state.stauth['register_user_lock'][email].append(
+        st.session_state.stuser['register_user_lock'][email].append(
             datetime.utcnow())
 
         if store_locked_time_function is not None:
@@ -2526,8 +2523,8 @@ class Authenticate(object):
 
     def check_authentication_status(self) -> bool:
         """Check if the user is authenticated."""
-        if ('stauth' in st.session_state and 'authentication_status' in
-                st.session_state.stauth and st.session_state.stauth[
+        if ('stuser' in st.session_state and 'authentication_status' in
+                st.session_state.stuser and st.session_state.stuser[
                 'authentication_status']):
             return True
         else:
@@ -2905,16 +2902,16 @@ class Authenticate(object):
             else:
                 return True
         else:
-            if ('login_lock' in st.session_state.stauth and
-                    username in st.session_state.stauth['login_lock'].keys()):
-                latest_lock = max(st.session_state.stauth['login_lock'][
+            if ('login_lock' in st.session_state.stuser and
+                    username in st.session_state.stuser['login_lock'].keys()):
+                latest_lock = max(st.session_state.stuser['login_lock'][
                                       username])
             else:
                 latest_lock = None
-            if ('login_unlock' in st.session_state.stauth and
-                    username in st.session_state.stauth[
+            if ('login_unlock' in st.session_state.stuser and
+                    username in st.session_state.stuser[
                         'login_unlock'].keys()):
-                latest_unlock = max(st.session_state.stauth['login_unlock'][
+                latest_unlock = max(st.session_state.stuser['login_unlock'][
                                         username])
             else:
                 latest_unlock = None
@@ -3168,12 +3165,12 @@ class Authenticate(object):
             store_unlocked_times_function. See the docstring for
             login for more information.
         """
-        if 'login_unlock' not in st.session_state.stauth:
-            st.session_state.stauth['login_unlock'] = {}
-        if username not in st.session_state.stauth['login_unlock'].keys():
-            st.session_state.stauth['login_unlock'][username] = []
+        if 'login_unlock' not in st.session_state.stuser:
+            st.session_state.stuser['login_unlock'] = {}
+        if username not in st.session_state.stuser['login_unlock'].keys():
+            st.session_state.stuser['login_unlock'][username] = []
         # append the current datetime
-        st.session_state.stauth['login_unlock'][username].append(
+        st.session_state.stuser['login_unlock'][username].append(
             datetime.utcnow())
 
         if store_unlocked_time_function is not None:
@@ -3212,12 +3209,12 @@ class Authenticate(object):
             store_locked_times_function. See the docstring for
             login for more information.
         """
-        if 'login_lock' not in st.session_state.stauth:
-            st.session_state.stauth['login_lock'] = {}
-        if username not in st.session_state.stauth['login_lock'].keys():
-            st.session_state.stauth['login_lock'][username] = []
+        if 'login_lock' not in st.session_state.stuser:
+            st.session_state.stuser['login_lock'] = {}
+        if username not in st.session_state.stuser['login_lock'].keys():
+            st.session_state.stuser['login_lock'][username] = []
         # append the current datetime
-        st.session_state.stauth['login_lock'][username].append(
+        st.session_state.stuser['login_lock'][username].append(
             datetime.utcnow())
 
         if store_locked_time_function is not None:
@@ -3370,13 +3367,13 @@ class Authenticate(object):
 
         :return: False if any errors, True if no errors.
         """
-        if 'failed_login_attempts' not in st.session_state.stauth:
-            st.session_state.stauth['failed_login_attempts'] = {}
-        if username not in st.session_state.stauth[
+        if 'failed_login_attempts' not in st.session_state.stuser:
+            st.session_state.stuser['failed_login_attempts'] = {}
+        if username not in st.session_state.stuser[
                 'failed_login_attempts'].keys():
-            st.session_state.stauth['failed_login_attempts'][username] = []
+            st.session_state.stuser['failed_login_attempts'][username] = []
         # append the current datetime
-        st.session_state.stauth['failed_login_attempts'][username].append(
+        st.session_state.stuser['failed_login_attempts'][username].append(
             datetime.utcnow())
 
         if store_incorrect_attempts_function is not None:
@@ -3552,17 +3549,17 @@ class Authenticate(object):
             _, latest_unlock = lock_unlock
         else:
             # if not, just use the session_state
-            if ('failed_login_attempts' in st.session_state.stauth and
-                    username in st.session_state.stauth[
+            if ('failed_login_attempts' in st.session_state.stuser and
+                    username in st.session_state.stuser[
                         'failed_login_attempts'].keys()):
-                attempts = pd.Series(st.session_state.stauth[
+                attempts = pd.Series(st.session_state.stuser[
                                          'failed_login_attempts'][username])
             else:
                 attempts = None
-            if ('login_unlock' in st.session_state.stauth and
-                    username in st.session_state.stauth[
+            if ('login_unlock' in st.session_state.stuser and
+                    username in st.session_state.stuser[
                         'login_unlock'].keys()):
-                latest_unlock = max(st.session_state.stauth['login_unlock'][
+                latest_unlock = max(st.session_state.stuser['login_unlock'][
                     username])
             else:
                 latest_unlock = None
@@ -3700,8 +3697,8 @@ class Authenticate(object):
             # first see if the account should be locked
             if self._check_locked_account_login(username, locked_info_function,
                                                 locked_info_args, locked_hours):
-                st.session_state.stauth['username'] = None
-                st.session_state.stauth['authentication_status'] = False
+                st.session_state.stuser['username'] = None
+                st.session_state.stuser['authentication_status'] = False
             else:
                 # only continue if the password is correct (and the email
                 # has been verified, if requiring that)
@@ -3718,11 +3715,11 @@ class Authenticate(object):
                     self._store_unlock_time_handler(
                         username, store_unlocked_time_function,
                         store_unlocked_time_args)
-                    st.session_state.stauth['username'] = username
-                    st.session_state.stauth['authentication_status'] = True
+                    st.session_state.stuser['username'] = username
+                    st.session_state.stuser['authentication_status'] = True
                 else:
-                    st.session_state.stauth['username'] = None
-                    st.session_state.stauth['authentication_status'] = False
+                    st.session_state.stuser['username'] = None
+                    st.session_state.stuser['authentication_status'] = False
                     if (not self._store_incorrect_login_attempts_handler(
                             username, store_incorrect_attempts_function,
                             store_incorrect_attempts_args)
@@ -3738,8 +3735,8 @@ class Authenticate(object):
         else:
             # here we have already set any errors in previous functions,
             # so just set authentication_status to false
-            st.session_state.stauth['username'] = None
-            st.session_state.stauth['authentication_status'] = False
+            st.session_state.stuser['username'] = None
+            st.session_state.stuser['authentication_status'] = False
 
     def login(self,
               location: str = 'main',
@@ -3773,7 +3770,7 @@ class Authenticate(object):
         if check_authentication_status():
             main()
         else:
-            stauth.login()
+            stuser.login()
             # you might also want a register_user widget here
 
         Note that we have one potential error that can persist even after
@@ -4273,8 +4270,8 @@ class Authenticate(object):
 
     def _logout(self) -> None:
         """Remove the session states showing the user is logged in."""
-        st.session_state.stauth['username'] = None
-        st.session_state.stauth['authentication_status'] = False
+        st.session_state.stuser['username'] = None
+        st.session_state.stuser['authentication_status'] = False
 
     def logout(self,
                location: str = 'main',
@@ -5272,18 +5269,17 @@ class Authenticate(object):
                                 info_type: str, new_info: str,
                                 info: str, username: str) -> None:
         """Replace any email or username that was in the
-            'authenticator_emails' or 'authenticator_usernames' session
-            states.
+            'stuser_emails' or 'stuser_usernames' session states.
             If we want to store the user's new info in a session_state,
             do that here too."""
         if info_type == 'email':
-            st.session_state['authenticator_emails'] = [
+            st.session_state['stuser_emails'] = [
                 new_info if x == info else x
-                for x in st.session_state['authenticator_emails']]
+                for x in st.session_state['stuser_emails']]
         elif info_type == 'username':
-            st.session_state['authenticator_usernames'] = [
+            st.session_state['stuser_usernames'] = [
                 new_info if x == username else x
-                for x in st.session_state['authenticator_usernames']]
+                for x in st.session_state['stuser_usernames']]
 
         if (store_new_info is not None and
                 (store_new_info == 'any' or
@@ -5292,11 +5288,11 @@ class Authenticate(object):
                  (isinstance(store_new_info, list) and
                   info_type in store_new_info))):
             if info_type == 'email':
-                st.session_state.stauth['new_email'] = new_info
+                st.session_state.stuser['new_email'] = new_info
             elif info_type == 'username':
-                st.session_state.stauth['new_username'] = new_info
+                st.session_state.stuser['new_username'] = new_info
             elif info_type == 'password':
-                st.session_state.stauth['new_password'] = new_info
+                st.session_state.stuser['new_password'] = new_info
 
     def _add_inputs_user_info_update(
             self, info_store_args: dict, info: str, info_type: str,
@@ -5416,7 +5412,7 @@ class Authenticate(object):
             the info type.
         :param user_info_text_key: The st.session_state name used to
             access the existing info (email or password, the username
-            is assumed to be in st.session_state.stauth['username'] since
+            is assumed to be in st.session_state.stuser['username'] since
             the user should be logged in).
         :param user_info_text_key_new: The st.session_state name used
             to access the new email, username or password.
@@ -5452,7 +5448,7 @@ class Authenticate(object):
             info = None
         new_info = st.session_state[user_info_text_key_new]
         repeat_new_info = st.session_state[user_info_text_key_new_repeat]
-        username = st.session_state.stauth['username']
+        username = st.session_state.stuser['username']
 
         # make sure the fields aren't blank
         if self._check_user_info(info_type, info, new_info, repeat_new_info):
@@ -5470,7 +5466,7 @@ class Authenticate(object):
                 if info_type == 'username':
                     existing_username = username
                     updated_username = new_info
-                    st.session_state.stauth['username'] = new_info
+                    st.session_state.stuser['username'] = new_info
                 else:
                     existing_username = updated_username = username
                 # store new_info in a session_state if desired
@@ -5697,9 +5693,9 @@ class Authenticate(object):
             an update. For example, if you wanted to save just email and
             username you could do store_new_info=['email', 'username'].
             These will be stored in the following session_states:
-            - email: st.session_state.stauth['new_email']
-            - username: st.session_state.stauth['new_username']
-            - password: st.session_state.stauth['new_password']
+            - email: st.session_state.stuser['new_email']
+            - username: st.session_state.stuser['new_username']
+            - password: st.session_state.stuser['new_password']
             Note that password will be the hashed password (not the
             original user input).
         """
@@ -5763,7 +5759,7 @@ class Authenticate(object):
                 'Repeat New Email', key=user_info_text_key_new_repeat).lower()
         elif info_type == 'Username':
             # we don't need the existing username here since it is stored
-            # in st.session_state.stauth['username'] once the user is
+            # in st.session_state.stuser['username'] once the user is
             # logged in
             info_new = update_user_info_form.text_input(
                 'New Username', key=user_info_text_key_new).lower()

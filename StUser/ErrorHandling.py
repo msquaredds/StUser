@@ -20,41 +20,41 @@ import streamlit as st
 
 def add_dev_error(key: str, error: str) -> None:
     """
-    Adds an error to the st.session_state.stauth['dev_errors'] dictionary.
+    Adds an error to the st.session_state.stuser['dev_errors'] dictionary.
 
     :param key: The key for the error.
     :param error: The error message to display.
     """
-    if 'stauth' not in st.session_state:
-        st.session_state.stauth = {}
-    if 'dev_errors' not in st.session_state.stauth:
-        st.session_state.stauth['dev_errors'] = {}
-    st.session_state.stauth['dev_errors'][key] = error
+    if 'stuser' not in st.session_state:
+        st.session_state.stuser = {}
+    if 'dev_errors' not in st.session_state.stuser:
+        st.session_state.stuser['dev_errors'] = {}
+    st.session_state.stuser['dev_errors'][key] = error
 
 def add_user_error(key: str, error: str) -> None:
     """
-    Adds an error to the st.session_state.stauth['user_errors']
+    Adds an error to the st.session_state.stuser['user_errors']
         dictionary.
 
     :param key: The key for the error.
     :param error: The error message to display.
     """
-    if 'stauth' not in st.session_state:
-        st.session_state.stauth = {}
-    if 'user_errors' not in st.session_state.stauth:
-        st.session_state.stauth['user_errors'] = {}
-    st.session_state.stauth['user_errors'][key] = error
+    if 'stuser' not in st.session_state:
+        st.session_state.stuser = {}
+    if 'user_errors' not in st.session_state.stuser:
+        st.session_state.stuser['user_errors'] = {}
+    st.session_state.stuser['user_errors'][key] = error
 
 def clear_errors() -> None:
     """
     Clear all dev_errors and user_errors from
-        streamlit.session_state.stauth.
+        streamlit.session_state.stuser.
     """
-    if 'stauth' in st.session_state:
-        if 'dev_errors' in st.session_state.stauth:
-            st.session_state.stauth['dev_errors'] = {}
-        if 'user_errors' in st.session_state.stauth:
-            st.session_state.stauth['user_errors'] = {}
+    if 'stuser' in st.session_state:
+        if 'dev_errors' in st.session_state.stuser:
+            st.session_state.stuser['dev_errors'] = {}
+        if 'user_errors' in st.session_state.stuser:
+            st.session_state.stuser['user_errors'] = {}
 
 def display_error(error_type: str, form: str,
                   first_display: bool=True) -> None:
@@ -79,27 +79,27 @@ def display_error(error_type: str, form: str,
         be displayed or not. If the error has already been displayed, then
         it should not be displayed again.
     """
-    if 'stauth' not in st.session_state:
-        st.session_state.stauth = {}
+    if 'stuser' not in st.session_state:
+        st.session_state.stuser = {}
     if first_display:
-        if 'displayed_errors' not in st.session_state.stauth:
-            st.session_state.stauth['displayed_errors'] = {}
-        if error_type not in st.session_state.stauth['displayed_errors']:
-            st.session_state.stauth['displayed_errors'][error_type] = {}
-        st.session_state.stauth['displayed_errors'][error_type][form] = False
-        if error_type in st.session_state.stauth:
-            if form in st.session_state.stauth[error_type]:
+        if 'displayed_errors' not in st.session_state.stuser:
+            st.session_state.stuser['displayed_errors'] = {}
+        if error_type not in st.session_state.stuser['displayed_errors']:
+            st.session_state.stuser['displayed_errors'][error_type] = {}
+        st.session_state.stuser['displayed_errors'][error_type][form] = False
+        if error_type in st.session_state.stuser:
+            if form in st.session_state.stuser[error_type]:
                 st.error(f"{error_type}: "
-                         f"{st.session_state.stauth[error_type][form]}")
-                st.session_state.stauth['displayed_errors'][
+                         f"{st.session_state.stuser[error_type][form]}")
+                st.session_state.stuser['displayed_errors'][
                     error_type][form] = True
     else:
-        if error_type in st.session_state.stauth:
-            if form in st.session_state.stauth[error_type]:
-                if not st.session_state.stauth['displayed_errors'][
+        if error_type in st.session_state.stuser:
+            if form in st.session_state.stuser[error_type]:
+                if not st.session_state.stuser['displayed_errors'][
                         error_type][form]:
                     st.error(f"{error_type}: "
-                             f"{st.session_state.stauth[error_type][form]}")
-                    st.session_state.stauth['displayed_errors'][
+                             f"{st.session_state.stuser[error_type][form]}")
+                    st.session_state.stuser['displayed_errors'][
                         error_type][form] = True
 

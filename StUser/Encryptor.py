@@ -10,7 +10,7 @@ from google.oauth2.service_account import Credentials
 from google.cloud import kms
 from typing import Tuple
 
-from StreamlitAuth import ErrorHandling as eh
+from StUser import ErrorHandling as eh
 
 
 class GenericEncryptor(object):

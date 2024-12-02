@@ -2,24 +2,23 @@ import streamlit as st
 
 from typing import Callable, Union
 
-from StreamlitAuth.BQTools import BQTools
-from StreamlitAuth.Email import Email
-from StreamlitAuth.Hasher import Hasher
-from StreamlitAuth.Validator import Validator
+from StUser.BQTools import BQTools
+from StUser.Email import Email
+from StUser.Hasher import Hasher
+from StUser.Validator import Validator
 
 
 class Verification(object):
     """
     Used for verification that happens outside of the main forms in
-    Authenticate.py.
+    Forms.py.
 
-    Unlike in Authenticate, we just raise errors here so they can be
-    handled in any way the user likes, since these may not be run in a
-    Streamlit app.
+    Unlike in Forms, we just raise errors here so they can be handled in
+    any way the user likes, since these may not be run in a Streamlit app.
     """
     def __init__(self) -> None:
-        if 'stauth' not in st.session_state:
-            st.session_state['stauth'] = {}
+        if 'stuser' not in st.session_state:
+            st.session_state['stuser'] = {}
 
     def _add_emails_codes(
             self, code_store_args: dict, auth_codes: dict) -> dict:
@@ -253,7 +252,7 @@ class Verification(object):
         validator = Validator()
         for e in email:
             auth_codes[e] = validator.generate_random_password()
-        st.session_state.stauth['auth_codes'] = auth_codes
+        st.session_state.stuser['auth_codes'] = auth_codes
 
         if code_store_function is not None:
             # we pass the hashed authorization codes for storage so they
@@ -538,7 +537,7 @@ class Verification(object):
         if self._check_email_code(
                 email_address, email_code, email_code_pull_function,
                 email_code_pull_args):
-            st.session_state.stauth['email_verified'] = True
+            st.session_state.stuser['email_verified'] = True
 
             if verified_store_function is not None:
                 # store that the verification was successful
@@ -546,4 +545,4 @@ class Verification(object):
                     verified_store_function, verified_store_args,
                     email_address, True)
         else:
-            st.session_state.stauth['email_verified'] = False
+            st.session_state.stuser['email_verified'] = False
