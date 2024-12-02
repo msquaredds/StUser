@@ -282,3 +282,13 @@ stuser_forms.register_user(
 sterr.display_error('dev_errors', 'register_user', False)
 sterr.display_error('user_errors', 'register_user', False)
 ```
+
+## Credit
+This package was originally forked from [Streamlit-Authenticator](
+https://github.com/mkhorasani/Streamlit-Authenticator) and so some credit
+must go to the original author - Mohammad Khorasani. That is why you might
+see some additional contributors in the GitHub repo for StUser. Note that
+the Streamlit-Authenticator package was under an Apache license at the
+time and while some of the outline was used, the code was completely
+rewritten.
+
