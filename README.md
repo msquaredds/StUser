@@ -40,6 +40,7 @@ methods for use with GCP BigQuery and SendGrid, respectively.
 The first step is to define where the user info will be stored. You can
 define your own storage locations and methods, but if using the
 predefined BigQuery option, your dataset and tables can look like this:
+
 ![img.png](Images/BQTables.png)
 
 This assumes that you are using all of the options available
@@ -81,7 +82,9 @@ session states (st.session_state). It will categorize the error as either
 'user_errors' or 'dev_errors'. These categories are dictionaries where
 the set of keys are the form names (such as 'login') and the values are 
 the error messages. You can access these errors by using the following
-syntax:
+syntax. Each form also has a display_error input that will automatically
+display any errors above the form (after it is run) and below the form
+(while it is being created).
 
 ```python
 from stuser import ErrorHandling as sterr
@@ -258,9 +261,6 @@ Notes:
     we have defined, you could do that with the additional variables.
 
 ```python
-sterr.display_error('dev_errors', 'register_user')
-sterr.display_error('user_errors', 'register_user')
-
 stuser_forms.register_user(
     'main',
     preauthorization=True,
@@ -281,9 +281,6 @@ stuser_forms.register_user(
         'table_name': 'incorrect_attempts_register', # whatever you called your table
         'email_col': 'email', # whatever you called your email column
         'datetime_col': 'datetime'}) # whatever you called your datetime column
-
-sterr.display_error('dev_errors', 'register_user', False)
-sterr.display_error('user_errors', 'register_user', False)
 ```
 
 ### Verify User Email
@@ -370,9 +367,6 @@ Notes:
 
 ```python
 if not stuser_forms.check_authentication_status():
-    sterr.display_error('dev_errors', 'login')
-    sterr.display_error('user_errors', 'login')
-
     stuser_forms.login(
         location='main',
         check_email_verification=True,
@@ -392,9 +386,6 @@ if not stuser_forms.check_authentication_status():
             'table_name': 'incorrect_attempts',
             'username_col': 'username',
             'datetime_col': 'datetime'})
-
-    sterr.display_error('dev_errors', 'login', False)
-    sterr.display_error('user_errors', 'login', False)
 ```
 
 ### Forgot Username
@@ -409,18 +400,12 @@ Notes:
     don't need to add them here.
 
 ```python
-sterr.display_error('dev_errors', 'forgot_username')
-sterr.display_error('user_errors', 'forgot_username')
-
 stuser_forms.forgot_username(
     location='main',
     username_pull_args={
         'table_name': 'user_credentials',
         'email_col': 'email',
         'username_col': 'username'})
-
-sterr.display_error('dev_errors', 'forgot_username', False)
-sterr.display_error('user_errors', 'forgot_username', False)
 ```
 
 ### Forgot Password
@@ -436,9 +421,6 @@ Notes:
     don't need to add them here.
 
 ```python
-sterr.display_error('dev_errors', 'forgot_password')
-sterr.display_error('user_errors', 'forgot_password')
-
 stuser_forms.forgot_password(
     location='main',
     username_pull_args={
@@ -450,9 +432,6 @@ stuser_forms.forgot_password(
         'username_col': 'username',
         'password_col': 'password',
         'datetime_col': 'datetime'})
-
-sterr.display_error('dev_errors', 'forgot_password', False)
-sterr.display_error('user_errors', 'forgot_password', False)
 ```
 
 ### Update User Info
@@ -474,9 +453,6 @@ Notes:
 
 ```python
 if stuser_forms.check_authentication_status():
-    sterr.display_error('dev_errors', 'update_user_info')
-    sterr.display_error('user_errors', 'update_user_info')
-
     stuser_forms.update_user_info(
         location='main',
         info_pull_args={
@@ -491,9 +467,6 @@ if stuser_forms.check_authentication_status():
                         'password': 'password',
                         'datetime': 'datetime'}},
         store_new_info='email')
-
-    sterr.display_error('dev_errors', 'update_user_info', False)
-    sterr.display_error('user_errors', 'update_user_info', False)
 ```
 
 ### Logout

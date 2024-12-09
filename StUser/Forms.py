@@ -15,8 +15,6 @@ class Forms(object):
     """
     Create register user, login, forgot password, forgot username,
     reset password, reset username and logout methods/widgets.
-
-    :method register_user: Creates a new user registration widget.
     """
     def __init__(self,
                  usernames_session_state: str,
@@ -1839,6 +1837,7 @@ class Forms(object):
     def register_user(
             self,
             location: str = 'main',
+            display_errors: bool = True,
             preauthorization: bool = False,
             verify_email: bool = False,
             email_text_key: str = 'register_user_email',
@@ -1852,7 +1851,7 @@ class Forms(object):
             email_creds: dict = None,
             cred_save_function: Union[Callable, str] = None,
             cred_save_args: dict = None,
-            auth_code_pull_function: Union[str, Callable] = 'bigquery',
+            auth_code_pull_function: Union[str, Callable] = None,
             auth_code_pull_args: dict = None,
             incorrect_attempts: int = 10,
             locked_hours: int = 24,
@@ -1874,6 +1873,8 @@ class Forms(object):
 
         :param location: The location of the register new user form i.e.
             main or sidebar.
+        :param display_errors: If True, display any errors that occur at
+            the beginning and end of the method.
         :param preauthorization: The preauthorization requirement.
             True: user must be preauthorized to register.
             False: any user can register.
@@ -2426,6 +2427,10 @@ class Forms(object):
             here. table_name, email_col and datetime_col must be
             defined here.
         """
+        if display_errors:
+            eh.display_error('dev_errors', 'register_user')
+            eh.display_error('user_errors', 'register_user')
+
         # check on whether all session state inputs exist and are the
         # correct type and whether the inputs are within the correct set
         # of options
@@ -2520,6 +2525,10 @@ class Forms(object):
                   store_incorrect_attempts_args,
                   pull_incorrect_attempts_function,
                   pull_incorrect_attempts_args))
+
+        if display_errors:
+            eh.display_error('dev_errors', 'register_user', False)
+            eh.display_error('user_errors', 'register_user', False)
 
     def check_authentication_status(self) -> bool:
         """Check if the user is authenticated."""
@@ -3740,6 +3749,7 @@ class Forms(object):
 
     def login(self,
               location: str = 'main',
+              display_errors: bool = True,
               username_text_key: str = 'login_username',
               password_text_key: str = 'login_password',
               password_pull_function: Union[str, Callable] = 'bigquery',
@@ -3781,6 +3791,8 @@ class Forms(object):
 
         :param location: The location of the login form i.e. main or
             sidebar.
+        :param display_errors: If True, display any errors that occur at
+            the beginning and end of the method.
         :param username_text_key: The key for the username text input on
             the login form. We attempt to default to a unique key, but you
             can put your own in here if you want to customize it or have
@@ -4204,6 +4216,10 @@ class Forms(object):
             here. table_name, username_col and datetime_col must be
             defined here.
         """
+        if display_errors:
+            eh.display_error('dev_errors', 'login')
+            eh.display_error('user_errors', 'login')
+
         # choose the correct save & pull functions & arguments, as well
         # as the correct incorrect attempts functions and arguments
         funcs_args_defined, funcs_and_args = (
@@ -4267,6 +4283,10 @@ class Forms(object):
                   store_incorrect_attempts_args,
                   pull_incorrect_attempts_function,
                   pull_incorrect_attempts_args))
+
+        if display_errors:
+            eh.display_error('dev_errors', 'login', False)
+            eh.display_error('user_errors', 'login', False)
 
     def _logout(self) -> None:
         """Remove the session states showing the user is logged in."""
@@ -4465,6 +4485,7 @@ class Forms(object):
     def forgot_username(
             self,
             location: str = 'main',
+            display_errors: bool = True,
             email_text_key: str = 'forgot_username_email',
             username_pull_function: Union[str, Callable] = None,
             username_pull_args: dict = None,
@@ -4476,6 +4497,8 @@ class Forms(object):
 
         :param location: The location of the login form i.e. main or
             sidebar.
+        :param display_errors: If True, display any errors that occur at
+            the beginning and end of the method.
         :param email_text_key: The key for the email text field. We
             attempt to default to a unique key, but you can put your own
             in here if you want to customize it or have clashes with other
@@ -4597,6 +4620,10 @@ class Forms(object):
             function and will likely include credentials to the email
             service.
         """
+        if display_errors:
+            eh.display_error('dev_errors', 'forgot_username')
+            eh.display_error('user_errors', 'forgot_username')
+
         # check whether the inputs are within the correct set of options
         if not self._check_form_inputs(location, 'forgot_username'):
             return False
@@ -4635,6 +4662,10 @@ class Forms(object):
             'Get Username', on_click=self._get_username,
             args=(email_text_key, username_pull_function, username_pull_args,
                   email_function, email_inputs, email_creds))
+
+        if display_errors:
+            eh.display_error('dev_errors', 'forgot_username', False)
+            eh.display_error('user_errors', 'forgot_username', False)
 
     def _check_email_username_info(self, email: str, username: str,
                                    repeat_username: str) -> bool:
@@ -4804,6 +4835,7 @@ class Forms(object):
     def forgot_password(
             self,
             location: str = 'main',
+            display_errors: bool = True,
             email_text_key: str = 'forgot_password_email',
             username_text_key: str = 'forgot_password_username',
             repeat_username_text_key: str = 'forgot_password_repeat_username',
@@ -4819,6 +4851,8 @@ class Forms(object):
 
         :param location: The location of the login form i.e. main or
             sidebar.
+        :param display_errors: If True, display any errors that occur at
+            the beginning and end of the method.
         :param email_text_key: The key for the email text field. We
             attempt to default to a unique key, but you can put your own
             in here if you want to customize it or have clashes with other
@@ -4982,6 +5016,10 @@ class Forms(object):
             function and will likely include credentials to the email
             service.
         """
+        if display_errors:
+            eh.display_error('dev_errors', 'forgot_password')
+            eh.display_error('user_errors', 'forgot_password')
+
         # check whether the inputs are within the correct set of options
         if not self._check_form_inputs(location, 'forgot_password'):
             return False
@@ -5036,6 +5074,10 @@ class Forms(object):
                   username_pull_function, username_pull_args,
                   password_store_function, password_store_args,
                   email_function, email_inputs, email_creds))
+
+        if display_errors:
+            eh.display_error('dev_errors', 'forgot_password', False)
+            eh.display_error('user_errors', 'forgot_password', False)
 
     def _check_store_new_info(self, store_new_info: Union[str, list]):
         """We want to make sure store_new_info is either 'any' or a string
@@ -5495,27 +5537,30 @@ class Forms(object):
                     eh.clear_errors()
 
     def update_user_info(
-            self,
-            location: str = 'main',
-            select_box_key: str = 'update_user_info_selectbox',
-            user_info_text_key: str = 'update_user_info_text',
-            user_info_text_key_new: str = 'update_user_info_text_new',
-            user_info_text_key_new_repeat: str =
-                'update_user_info_text_new_repeat',
-            info_pull_function: Union[str, Callable] = None,
-            info_pull_args: dict = None,
-            info_store_function: Union[str, Callable] = None,
-            info_store_args: dict = None,
-            email_function: Union[Callable, str] = None,
-            email_inputs: dict = None,
-            email_creds: dict = None,
-            store_new_info: Union[str, list] = None) -> None:
+        self,
+        location: str = 'main',
+        display_errors: bool = True,
+        select_box_key: str = 'update_user_info_selectbox',
+        user_info_text_key: str = 'update_user_info_text',
+        user_info_text_key_new: str = 'update_user_info_text_new',
+        user_info_text_key_new_repeat: str =
+            'update_user_info_text_new_repeat',
+        info_pull_function: Union[str, Callable] = None,
+        info_pull_args: dict = None,
+        info_store_function: Union[str, Callable] = None,
+        info_store_args: dict = None,
+        email_function: Union[Callable, str] = None,
+        email_inputs: dict = None,
+        email_creds: dict = None,
+        store_new_info: Union[str, list] = None) -> None:
         """
         Creates an update user info form. This allows the user to change
             their email, username or password.
 
         :param location: The location of the login form i.e. main or
             sidebar.
+        :param display_errors: If True, display any errors that occur at
+            the beginning and end of the method.
         :param select_box_key: The key for the select box that allows the
             user to choose what they want to update. We attempt to default
             to a unique key, but you can put your own in here if you want
@@ -5699,6 +5744,10 @@ class Forms(object):
             Note that password will be the hashed password (not the
             original user input).
         """
+        if display_errors:
+            eh.display_error('dev_errors', 'update_user_info')
+            eh.display_error('user_errors', 'update_user_info')
+
         # check whether the inputs are within the correct set of options
         if (not self._check_form_inputs(location, 'update_user_info') or
                 not self._check_store_new_info(store_new_info)):
@@ -5783,3 +5832,7 @@ class Forms(object):
                   info_store_function, info_store_args,
                   email_function, email_inputs, email_creds,
                   store_new_info))
+
+        if display_errors:
+            eh.display_error('dev_errors', 'update_user_info', False)
+            eh.display_error('user_errors', 'update_user_info', False)
