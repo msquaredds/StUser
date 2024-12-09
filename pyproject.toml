@@ -3,7 +3,7 @@ requires = ["setuptools >= 61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "StUser"
+name = "stuser"
 version = '0.0.1'
 description = 'User registration, login and associated ecosystem for Streamlit'
 authors = [
@@ -15,9 +15,7 @@ dependencies = [
     "argon2-cffi >= 23.1.0",
     "crcmod >= 1.7",
     "cryptography >= 43.0.3",
-    "db-dtypes >= 1.3.1",
     "pandas >= 2.2.3",
-    "sendgrid >= 6.11.0",
     "streamlit >= 1.40.0"
 ]
 keywords = ['Python', 'Streamlit', 'Authentication', 'Components']
@@ -31,11 +29,15 @@ classifiers = [
 
 [project.optional-dependencies]
 google = [
+    "db-dtypes >= 1.3.1",
     "google-api-python-client >= 2.153.0",
     "google-auth >= 2.36.0",
     "google-auth-httplib2 >= 0.2.0",
     "google-auth-oauthlib >= 1.2.1",
     "google-cloud-kms >= 3.1.0"
+]
+sendgrib = [
+    "sendgrid >= 6.11.0"
 ]
 
 [project.urls]
