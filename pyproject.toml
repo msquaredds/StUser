@@ -36,7 +36,7 @@ google = [
     "google-auth-oauthlib >= 1.2.1",
     "google-cloud-kms >= 3.1.0"
 ]
-sendgrib = [
+sendgrid = [
     "sendgrid >= 6.11.0"
 ]
 

@@ -10,6 +10,12 @@ StUser can be installed via pip from [PyPI](https://pypi.org/project/stuser/):
 pip install stuser
 ```
 
+or with the optional dependencies:
+
+```python
+pip install stuser[google,sendgrid]
+```
+
 ## Contact
 
 I would like this package to be as useful as possible, so please feel free
