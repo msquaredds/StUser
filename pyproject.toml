@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stuser"
-version = '0.0.1'
+version = '0.0.1.dev1'
 description = 'User registration, login and associated ecosystem for Streamlit'
 authors = [
     {name = 'Alex Melesko', email='alex.melesko@msquaredds.com'}
@@ -34,6 +34,7 @@ google = [
     "google-auth >= 2.36.0",
     "google-auth-httplib2 >= 0.2.0",
     "google-auth-oauthlib >= 1.2.1",
+    "google-cloud-bigquery >= 3.27.0",
     "google-cloud-kms >= 3.1.0"
 ]
 sendgrid = [
@@ -45,7 +46,7 @@ sendgrid = [
 'test repository' = 'https://github.com/msquaredds/StreamlitAuth'
 
 [tool.setuptools]
-packages = ["StUser"]
+packages = ["stuser"]
 
 [tool.setuptools.dynamic]
 readme = {file = "README.md"}

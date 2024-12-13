@@ -1,10 +1,10 @@
-# StUser
+# stuser
 
 **User registration, login and associated ecosystem for Streamlit**
 
 ## Installation
 
-StUser can be installed via pip from [PyPI](https://pypi.org/project/stuser/):
+stuser can be installed via pip from [PyPI](https://pypi.org/project/stuser/):
 
 ```python
 pip install stuser
@@ -183,8 +183,8 @@ elif usernames_indicator == 'user_errors':
     auth_usernames = []
 else:
     auth_usernames = list(saved_auth_usernames.values)
-    if 'stuser_usernames' not in st.session_state:
-        st.session_state['stuser_usernames'] = auth_usernames
+if 'stuser_usernames' not in st.session_state:
+    st.session_state['stuser_usernames'] = auth_usernames
 ```
 
 The same pattern can be used to pull the emails and preauthorized users.

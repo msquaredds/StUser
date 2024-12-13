@@ -4,11 +4,11 @@ import streamlit as st
 from datetime import datetime, timedelta
 from typing import Callable, Tuple, Union
 
-from StUser import ErrorHandling as eh
-from StUser.BQTools import BQTools
-from StUser.Email import Email
-from StUser.Hasher import Hasher
-from StUser.Validator import Validator
+from stuser import ErrorHandling as eh
+from stuser.BQTools import BQTools
+from stuser.Email import Email
+from stuser.Hasher import Hasher
+from stuser.Validator import Validator
 
 
 class Forms(object):

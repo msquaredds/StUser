@@ -2,10 +2,10 @@ import streamlit as st
 
 from typing import Callable, Union
 
-from StUser.BQTools import BQTools
-from StUser.Email import Email
-from StUser.Hasher import Hasher
-from StUser.Validator import Validator
+from stuser.BQTools import BQTools
+from stuser.Email import Email
+from stuser.Hasher import Hasher
+from stuser.Validator import Validator
 
 
 class Verification(object):
