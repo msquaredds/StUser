@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stuser"
-version = '0.0.1.dev1'
+version = '0.0.1.dev2'
 description = 'User registration, login and associated ecosystem for Streamlit'
 authors = [
     {name = 'Alex Melesko', email='alex.melesko@msquaredds.com'}
@@ -34,8 +34,7 @@ google = [
     "google-auth >= 2.36.0",
     "google-auth-httplib2 >= 0.2.0",
     "google-auth-oauthlib >= 1.2.1",
-    "google-cloud-bigquery >= 3.27.0",
-    "google-cloud-kms >= 3.1.0"
+    "google-cloud-bigquery >= 3.27.0"
 ]
 sendgrid = [
     "sendgrid >= 6.11.0"
