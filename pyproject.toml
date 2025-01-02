@@ -4,8 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stuser"
-version = '0.0.1'
+version = '0.0.2'
 description = 'User registration, login and associated ecosystem for Streamlit'
+readme = 'README.md'
 authors = [
     {name = 'Alex Melesko', email='alex.melesko@msquaredds.com'}
 ]
@@ -45,6 +46,3 @@ sendgrid = [
 
 [tool.setuptools]
 packages = ["stuser"]
-
-[tool.setuptools.dynamic]
-readme = {file = "README.md"}
