@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stuser"
-version = '0.0.3.dev0'
+version = '0.0.3'
 description = 'User registration, login and associated ecosystem for Streamlit'
 readme = 'README.md'
 authors = [

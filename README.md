@@ -320,6 +320,8 @@ stuser_forms.register_user(
         'datetime_col': 'datetime'}) # whatever you called your datetime column
 ```
 
+![](https://github.com/msquaredds/StUser/blob/main/images/RegisterUser.JPG?raw=true)
+
 ### Verify User Email
 
 If you have chosen to require email verification (verify_email=True in
@@ -425,6 +427,8 @@ if not stuser_forms.check_authentication_status():
             'datetime_col': 'datetime'})
 ```
 
+![](https://github.com/msquaredds/StUser/blob/main/images/Login.JPG?raw=true)
+
 ### Forgot Username
 
 If a user forgets their username, they can enter their email address and
@@ -444,6 +448,8 @@ stuser_forms.forgot_username(
         'email_col': 'email',
         'username_col': 'username'})
 ```
+
+![](https://github.com/msquaredds/StUser/blob/main/images/ForgotUsername.JPG?raw=true)
 
 ### Forgot Password
 
@@ -470,6 +476,8 @@ stuser_forms.forgot_password(
         'password_col': 'password',
         'datetime_col': 'datetime'})
 ```
+
+![](https://github.com/msquaredds/StUser/blob/main/images/ForgotPassword.JPG?raw=true)
 
 ### Update User Info
 
@@ -506,6 +514,8 @@ if stuser_forms.check_authentication_status():
         store_new_info='email')
 ```
 
+![](https://github.com/msquaredds/StUser/blob/main/images/UpdateUserInfo.JPG?raw=true)
+
 ### Logout
 
 Finally, once a user is logged in, we can log them out.
@@ -513,6 +523,8 @@ Finally, once a user is logged in, we can log them out.
 ```python
 stuser_forms.logout()
 ```
+
+![](https://github.com/msquaredds/StUser/blob/main/images/Logout.JPG?raw=true)
 
 ## Credit
 This package was originally forked from [Streamlit-Authenticator](
