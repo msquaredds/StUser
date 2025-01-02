@@ -2,6 +2,14 @@
 
 **User registration, login and associated ecosystem for Streamlit**
 
+stuser is a package that allows you to create a user registration and
+login system for your Streamlit application. It is meant to be a robust
+way to allow users to interact with your website securely. It has
+pre-defined integrations for databases and email, and specifically defines
+methods for use with GCP BigQuery and SendGrid, respectively. It also
+allows for user-defined methods to interact with other databases and email
+services.
+
 ## Installation
 
 stuser can be installed via pip from [PyPI](https://pypi.org/project/stuser/):
@@ -23,13 +31,34 @@ to reach out with any questions, comments or if you would like to
 contribute. You can reach me at
 [alex.melesko@msquaredds.com](mailto:alex.melesko@msquaredds.com).
 
-## Full Example
+## Template
 
-StUser is a package that allows you to create a user registration and
-login system for your Streamlit application. It is meant to be a robust
-way to allow users to interact with your website securely. It has
-pre-defined integrations for databases and email, and specifically defines
-methods for use with GCP BigQuery and SendGrid, respectively.
+The stuser package ships with a folder called 'template' that contains
+example code for how to use the package. The template is a full example
+that includes all the steps needed to create a streamlit web app.
+- The file main.py is the entry point.
+- The file SendPreauthCodes.py creates a tab that allows you to enter
+  emails and send preauthorization codes.
+- The file EmailVerification.py creates a tab that allows you to verify
+  emails when a user clicks on a link in their email.
+- The file Forms.py creates a tab that allows users to register, login,
+  retrieve a forgotten username (with forgot_username), get a new password
+  (with forgot_password), update their user info (with update_user_info)
+  and logout.
+
+Note that many of the inputs to the methods will need to updated to
+reflect the specifics of your project. This includes database info, such
+as project, dataset, table and column names. It also includes website name
+and email in the class instantiation and the verification url in the
+register_user method.
+
+Some of the credentials inputs that are predefined here are based on
+st.secrets, which is a feature that allows you to store sensitive
+information in a separate location when hosting your app on Streamlit.io.
+The separate location is a TOML-type file that would have you store
+'BIGQUERY' and 'SENDGRID' credentials so they can be accessed here.
+
+## Full Example
 
 ### Understand Your Options
 
@@ -47,7 +76,7 @@ The first step is to define where the user info will be stored. You can
 define your own storage locations and methods, but if using the
 predefined BigQuery option, your dataset and tables can look like this:
 
-![img.png](Images/BQTables.png)
+![img.png](images/BQTables.png)
 
 This assumes that you are using all of the options available
 (preauthorization, email validation, and lockout after failed attempts).

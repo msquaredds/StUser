@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stuser"
-version = '0.0.1.dev2'
+version = '0.0.1'
 description = 'User registration, login and associated ecosystem for Streamlit'
 authors = [
     {name = 'Alex Melesko', email='alex.melesko@msquaredds.com'}
@@ -41,8 +41,7 @@ sendgrid = [
 ]
 
 [project.urls]
-'main repository' = 'https://github.com/msquaredds/StUser'
-'test repository' = 'https://github.com/msquaredds/StreamlitAuth'
+'repository' = 'https://github.com/msquaredds/StUser'
 
 [tool.setuptools]
 packages = ["stuser"]
