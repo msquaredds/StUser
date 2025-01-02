@@ -12,6 +12,8 @@ services.
 
 ## Installation
 
+[![PyPI](https://img.shields.io/pypi/v/stuser)](https://pypi.org/project/stuser/)
+
 stuser can be installed via pip from [PyPI](https://pypi.org/project/stuser/):
 
 ```python
@@ -76,7 +78,7 @@ The first step is to define where the user info will be stored. You can
 define your own storage locations and methods, but if using the
 predefined BigQuery option, your dataset and tables can look like this:
 
-![img.png](images/BQTables.png)
+![](https://github.com/msquaredds/StUser/blob/main/images/BQTables.png?raw=true)
 
 This assumes that you are using all of the options available
 (preauthorization, email validation, and lockout after failed attempts).
